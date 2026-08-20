@@ -7,6 +7,7 @@ import { gradeSpokenAnswer, type DexLanguage } from '../services/dexTutor';
 import { transcribeAudio } from '../services/openai';
 import { query } from '../db';
 import fs from 'fs';
+import { audioUploadLimiter } from '../middleware/rateLimiters';
 
 const router = Router();
 
@@ -21,7 +22,8 @@ const dexLimiter = rateLimit({
 
 // POST /api/v1/dex/grade-answer
 // Grade a student's spoken answer against an expected answer.
-router.post('/grade-answer', authenticate, dexLimiter, async (req: AuthRequest, res) => {
+// Requires parental consent for minor students.
+router.post('/grade-answer', authenticate, requireConsent, dexLimiter, async (req: AuthRequest, res) => {
   const { question, expectedAnswer, studentTranscript } = req.body;
 
   // Validate all three fields
@@ -30,16 +32,31 @@ router.post('/grade-answer', authenticate, dexLimiter, async (req: AuthRequest, 
       error: { code: 'VALIDATION_ERROR', message: 'question is required and must be a non-empty string' },
     });
   }
+  if (question.length > 2000) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'question must be 2000 characters or fewer' },
+    });
+  }
 
   if (!expectedAnswer || typeof expectedAnswer !== 'string' || expectedAnswer.trim().length === 0) {
     return res.status(400).json({
       error: { code: 'VALIDATION_ERROR', message: 'expectedAnswer is required and must be a non-empty string' },
     });
   }
+  if (expectedAnswer.length > 2000) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'expectedAnswer must be 2000 characters or fewer' },
+    });
+  }
 
   if (!studentTranscript || typeof studentTranscript !== 'string' || studentTranscript.trim().length === 0) {
     return res.status(400).json({
       error: { code: 'VALIDATION_ERROR', message: 'studentTranscript is required and must be a non-empty string' },
+    });
+  }
+  if (studentTranscript.length > 2000) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'studentTranscript must be 2000 characters or fewer' },
     });
   }
 
@@ -67,7 +84,7 @@ router.post('/grade-answer', authenticate, dexLimiter, async (req: AuthRequest, 
 // POST /api/v1/dex/transcribe
 // Transcribe uploaded audio using the existing Whisper STT service.
 // Requires parental consent (same gate as session audio upload).
-router.post('/transcribe', authenticate, requireConsent, dexLimiter, upload.single('audio'), async (req: AuthRequest, res) => {
+router.post('/transcribe', authenticate, requireConsent, audioUploadLimiter, upload.single('audio'), async (req: AuthRequest, res) => {
   const file = req.file;
 
   if (!file) {
@@ -88,7 +105,12 @@ router.post('/transcribe', authenticate, requireConsent, dexLimiter, upload.sing
   } catch (err) {
     console.error('Transcription route error:', err);
     res.status(500).json({
-      error: { code: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : 'Failed to transcribe audio' },
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: process.env.NODE_ENV === 'production'
+          ? 'Failed to transcribe audio'
+          : (err instanceof Error ? err.message : 'Failed to transcribe audio'),
+      },
     });
   } finally {
     // Clean up temp file — never persist raw audio (privacy requirement)

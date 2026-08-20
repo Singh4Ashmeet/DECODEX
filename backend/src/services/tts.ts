@@ -1,13 +1,13 @@
-import OpenAI from 'openai';
 import CircuitBreaker from 'opossum';
 import dotenv from 'dotenv';
 import { getCache, setCache } from './cache';
+import { getLLMProvider } from './llmProviders';
 
 dotenv.config();
 
 // ---------------------------------------------------------------------------
 // Decodex TTS Service — Synthesizes speech from transcript text on-demand.
-// Wraps OpenAI TTS API (tts-1, nova voice) in an opossum circuit breaker.
+// Supports multiple providers: OpenAI (default), self-hosted via provider abstraction.
 // On failure/breaker-open, returns { useBrowserTts: true } so callers can
 // fall back silently to the browser's SpeechSynthesis API — never throws.
 // ---------------------------------------------------------------------------
@@ -22,13 +22,6 @@ export interface TtsResult {
 // Each phrase has a stable ID and supports multiple languages.
 // 'en' (English) is the required fallback. Other languages can be added over time.
 // If a requested language is missing for a phrase, falls back to 'en'.
-//
-// IMPORTANT: When adding real translations for a new language (e.g., 'es', 'fr'),
-// any existing Redis cache entries for that language (tts:phrase:{phraseId}:{lang})
-// that were populated with English-fallback audio MUST be explicitly invalidated
-// (via deleteCache) rather than left to expire naturally. Otherwise, users will
-// continue to hear English audio for that language until the 30-day TTL expires.
-// This is a correctness issue, not just a cost optimization.
 // ---------------------------------------------------------------------------
 
 export type SupportedLanguage = 'en' | 'hi' | string; // 'en' required, 'hi' for Hindi PoC, extensible
@@ -112,11 +105,16 @@ function getPhraseCacheKey(phraseId: PhraseId, language: SupportedLanguage = 'en
   return `tts:phrase:${phraseId}:${language}`;
 }
 
-const getOpenAIClient = () => {
+let openAIClient: any = null;
+
+function getOpenAIClient() {
+  if (openAIClient) return openAIClient;
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
-  return new OpenAI({ apiKey });
-};
+  const OpenAI = require('openai').default;
+  openAIClient = new OpenAI({ apiKey });
+  return openAIClient;
+}
 
 /**
  * Inner function wrapped by the circuit breaker.
@@ -160,7 +158,8 @@ ttsBreaker.fallback(() => {
 });
 
 /**
- * Synthesize speech from text using OpenAI TTS.
+ * Synthesize speech from text using the configured TTS provider.
+ * Currently uses OpenAI TTS as default; self-hosted TTS can be added via provider abstraction.
  *
  * Returns an audio buffer (mp3) or a signal to use browser TTS as fallback.
  * Never throws — all errors result in the browser fallback.
@@ -168,8 +167,27 @@ ttsBreaker.fallback(() => {
  * This is used for dynamic/transcript content (e.g., student recording playback) and MUST NOT be cached.
  */
 export const synthesizeSpeech = async (text: string): Promise<TtsResult> => {
+  // Try provider TTS first (self-hosted if configured)
+  const provider = getLLMProvider();
+  try {
+    const result = await provider.synthesizeSpeech({ text, language: 'en' });
+    if (!result.useBrowserTts && result.audioBuffer) {
+      return result;
+    }
+  } catch (err) {
+    console.warn('Provider TTS failed, falling back to OpenAI:', (err as Error).message);
+  }
+
+  // Fallback to OpenAI TTS with circuit breaker
   return await ttsBreaker.fire(text);
 };
+
+/**
+ * Generate cache key for a phrase bank entry, scoped by language.
+ */
+function getPhraseCacheKey(phraseId: PhraseId, language: SupportedLanguage = 'en'): string {
+  return `tts:phrase:${phraseId}:${language}`;
+}
 
 /**
  * Synthesize speech for a stock phrase from the phrase bank.
@@ -189,7 +207,15 @@ export const synthesizePhrase = async (phraseId: PhraseId, language: SupportedLa
 
   console.log(`[TTS Phrase Cache] MISS: ${phraseId}:${language}`);
   const text = getPhraseText(phraseId, language);
-  const result = await ttsBreaker.fire(text);
+  
+  // Try provider TTS first
+  let result: TtsResult;
+  const provider = getLLMProvider();
+  try {
+    result = await provider.synthesizeSpeech({ text, language });
+  } catch {
+    result = await ttsBreaker.fire(text);
+  }
 
   if (!result.useBrowserTts && result.audioBuffer) {
     // Cache the audio buffer as base64 string with 30-day TTL
@@ -198,3 +224,8 @@ export const synthesizePhrase = async (phraseId: PhraseId, language: SupportedLa
 
   return result;
 };
+
+
+// ---------------------------------------------------------------------------
+// Exported types and utilities
+// ---------------------------------------------------------------------------

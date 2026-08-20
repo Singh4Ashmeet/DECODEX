@@ -8,8 +8,10 @@ import jwt from 'jsonwebtoken';
 // Load test env vars before anything else
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-secret-that-is-at-least-32-characters-long-for-validation';
+process.env.SESSION_SECRET = 'test-session-secret-that-is-at-least-32-characters-long';
 process.env.FRONTEND_URL = 'http://localhost:5173';
 process.env.REDIS_URL = 'redis://localhost:6379';
+process.env.PII_ENCRYPTION_KEY = 'qWKXzURWvVLgjqn9TxLnCUafS5/QZKttnNOsLSi+9Eo=';
 
 // ---- Mock the database module ----
 const mockQuery = vi.fn();

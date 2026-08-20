@@ -1,8 +1,13 @@
-import OpenAI from 'openai';
 import CircuitBreaker from 'opossum';
 import dotenv from 'dotenv';
 import { AlignmentResult } from './alignment';
 import { getCache, setCache } from './cache';
+import { 
+  getLLMProvider, 
+  ClassificationRequest, 
+  ClassificationResponse,
+  LLMProvider 
+} from './llmProviders';
 
 dotenv.config();
 
@@ -37,26 +42,6 @@ function getClassificationCacheKey(sourceWord: string | null, spokenWord: string
   }
   return `classify:sub:${src}:${spk}`;
 }
-
-const classificationPrompt = `
-You are an expert reading specialist trained in the Orton-Gillingham approach.
-Given a list of reading errors (insertions, omissions, substitutions), classify each error into ONE of the following categories:
-- REV: Reversal or Transposition (e.g., 'was' for 'saw', 'no' for 'on', 'from' for 'form', 'b' for 'd', 'p' for 'q', 'w' for 'm')
-- SUB: Substitution (e.g., 'house' for 'horse' due to visual similarity, or completely different word)
-- OMI: Omission (skipped a word)
-- INS: Insertion (added a word)
-- BLD: Blend breakdown (e.g., 'st-op' instead of 'stop')
-- PAC: Pacing/Self-correction (stumbling, repeating, then fixing)
-- UNC: Uncertain (cannot determine with confidence)
-
-IMPORTANT RULE FOR REV (Reversals):
-If the spoken word is a string reversal (e.g. 'was' for 'saw'), a letter transposition (e.g. 'from' for 'form', 'felt' for 'flet'), or a directional letter swap (e.g. 'big' for 'dig', 'bad' for 'dad'), you MUST classify it as REV.
-
-Respond ONLY with a JSON object containing a single key "classifications" whose value is an array of objects.
-Each object must have exactly these keys: "index" (integer), "category" (string, one of the codes above), "rationale" (string, ≤30 words).
-Example response format:
-{"classifications": [{"index": 0, "category": "REV", "rationale": "Reversed letter order: read 'was' for 'saw'."}]}
-`;
 
 function isReversal(src: string, spk: string): boolean {
   if (!src || !spk) return false;
@@ -117,80 +102,12 @@ function applyRuleBasedOGClassification(errors: AlignmentResult[]): Classificati
       rationale,
     };
   });
-}
-
-const getGroqClient = () => {
-  const apiKey = process.env.GROQ_API_KEY || 'dummy_groq_key';
-  return {
-    client: new OpenAI({ apiKey, baseURL: 'https://api.groq.com/openai/v1' }),
-    model: 'llama-3.3-70b-versatile',
-  };
 };
-
-const _classifyErrors = async (errors: AlignmentResult[]): Promise<ClassificationResult[]> => {
-  const hasGroq = Boolean(process.env.GROQ_API_KEY);
-
-  if (!hasGroq) {
-    return applyRuleBasedOGClassification(errors);
-  }
-
-  const { client, model } = getGroqClient();
-
-  try {
-    const response = await client.chat.completions.create({
-      model,
-      messages: [
-        { role: 'system', content: classificationPrompt },
-        { role: 'user', content: JSON.stringify(errors) }
-      ],
-      response_format: { type: 'json_object' },
-    });
-
-    const content = response.choices[0].message.content || '{"classifications": []}';
-    let parsed: { classifications?: any[] };
-
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      console.error('Failed to parse Groq LLM JSON response:', content);
-      parsed = { classifications: [] };
-    }
-
-    return errors.map(e => {
-      const classification = parsed.classifications?.find((c: any) => c.index === e.index);
-      const fallbackCat = (e.sourceWord && e.spokenWord && isReversal(e.sourceWord, e.spokenWord)) ? 'REV' : 'SUB';
-      return {
-        index: e.index,
-        sourceWord: e.sourceWord,
-        spokenWord: e.spokenWord,
-        category: (classification?.category as ErrorCategory) || fallbackCat,
-        rationale: classification?.rationale || 'Orton-Gillingham classification applied.',
-      };
-    });
-  } catch (err: any) {
-    console.warn(`Groq LLM API call (${model}) failed. Using smart Orton-Gillingham rule engine:`, err.message);
-    return applyRuleBasedOGClassification(errors);
-  }
-};
-
-// Circuit Breaker configuration
-const breakerOptions = {
-  timeout: 10000,
-  errorThresholdPercentage: 50,
-  resetTimeout: 30000,
-};
-
-const classifierBreaker = new CircuitBreaker(_classifyErrors, breakerOptions);
-
-classifierBreaker.fallback((errors: AlignmentResult[]) => {
-  console.warn('Classifier circuit breaker OPEN or timeout. Using Orton-Gillingham rule engine fallback.');
-  return applyRuleBasedOGClassification(errors);
-});
 
 /**
- * Classify errors with per-error caching.
+ * Classify errors using the configured LLM provider with per-error caching.
  * Each error is cached individually using a normalized key: (sourceWord, spokenWord) - lowercase, trimmed.
- * On cache hit, returns cached classification. On miss, calls GPT-4o-mini (via Groq) and caches result with 30-day TTL.
+ * On cache hit, returns cached classification. On miss, calls LLM provider and caches result with 30-day TTL.
  * Logs cache hit vs miss for hit-rate tracking.
  */
 export const classifyErrors = async (alignment: AlignmentResult[]): Promise<ClassificationResult[]> => {
@@ -217,10 +134,29 @@ export const classifyErrors = async (alignment: AlignmentResult[]): Promise<Clas
     }
   }
 
-  // If there are cache misses, call the LLM for those errors
+  // If there are cache misses, call the LLM provider for those errors
   if (errorsToClassify.length > 0) {
-    console.log(`[Classifier] Calling Groq LLM for ${errorsToClassify.length} uncached error(s)...`);
-    const classifiedResults = await classifierBreaker.fire(errorsToClassify);
+    console.log(`[Classifier] Calling LLM provider for ${errorsToClassify.length} uncached error(s)...`);
+    
+    const provider = getLLMProvider();
+    
+    const request: ClassificationRequest = {
+      errors: errorsToClassify.map(e => ({
+        index: e.index,
+        sourceWord: e.sourceWord,
+        spokenWord: e.spokenWord,
+        type: e.type,
+      })),
+    };
+
+    let classifiedResults: ClassificationResponse[];
+    
+    try {
+      classifiedResults = await provider.classifyErrors(request);
+    } catch (err: any) {
+      console.warn(`LLM provider failed. Using Orton-Gillingham rule engine fallback:`, err.message);
+      classifiedResults = applyRuleBasedOGClassification(errorsToClassify);
+    }
 
     // Store each result in cache and fill in the results array
     for (let i = 0; i < classifiedResults.length; i++) {
@@ -230,15 +166,23 @@ export const classifyErrors = async (alignment: AlignmentResult[]): Promise<Clas
 
       const cacheKey = getClassificationCacheKey(error.sourceWord, error.spokenWord);
 
-      // Only cache if not a fallback result (fallback results have generic rationale)
+      // Only cache if not a fallback result
       const isFallback = result.rationale === 'Fallback applied due to service timeout/error.';
       if (!isFallback) {
         await setCache(cacheKey, JSON.stringify(result), 2592000); // 30 days TTL
       }
 
-      results[resultIndex] = result;
+      results[resultIndex] = {
+        index: result.index,
+        sourceWord: result.sourceWord,
+        spokenWord: result.spokenWord,
+        category: result.category,
+        rationale: result.rationale,
+      };
     }
   }
 
   return results;
 };
+
+export { applyRuleBasedOGClassification, getClassificationCacheKey };

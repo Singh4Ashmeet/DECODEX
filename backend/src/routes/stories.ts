@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { llmLimiter } from '../middleware/rateLimiters';
 import { generateStory, getStudentStories, getStoryById } from '../services/storyGenerator';
 
 const router = Router();
 
 // POST /api/v1/stories/generate
 // Generate a new adaptive story for the authenticated student.
-router.post('/generate', authenticate, async (req: AuthRequest, res) => {
+router.post('/generate', authenticate, llmLimiter, async (req: AuthRequest, res) => {
   const studentId = req.body.student_id || req.user?.id;
 
   // Students can only generate for themselves

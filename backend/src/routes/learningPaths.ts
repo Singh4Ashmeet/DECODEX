@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { llmLimiter } from '../middleware/rateLimiters';
 import { generateLearningPath, getActiveLearningPath, completeDayTask } from '../services/learningPath';
 
 const router = Router();
@@ -26,7 +27,7 @@ router.get('/:studentId', authenticate, async (req: AuthRequest, res) => {
 
 // POST /api/v1/learning-paths/:studentId/generate
 // Generate a new learning path for a student.
-router.post('/:studentId/generate', authenticate, async (req: AuthRequest, res) => {
+router.post('/:studentId/generate', authenticate, llmLimiter, async (req: AuthRequest, res) => {
   const studentId = String(req.params.studentId);
   const requesterRole = req.user?.role;
   const requesterId = req.user?.id;

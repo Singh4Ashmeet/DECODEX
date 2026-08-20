@@ -7,6 +7,7 @@ import AnnotatedText from '../components/AnnotatedText';
 import DrillCard from '../components/DrillCard';
 import { AnimatedCounter } from '../components/AnimatedCounter';
 import DexAvatar from '../components/DexAvatar';
+import EducationalDisclaimer from '../components/EducationalDisclaimer';
 
 export default function SessionResults() {
   const { id } = useParams();
@@ -223,6 +224,8 @@ export default function SessionResults() {
           )}
         </motion.div>
       </div>
+
+      <EducationalDisclaimer variant="card" className="mt-8" />
     </motion.main>
   );
 }

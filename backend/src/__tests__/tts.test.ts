@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
-import { generateTestToken, TEST_USERS } from './helpers/setup';
+import { mockQuery, generateTestToken, TEST_USERS } from './helpers/setup';
 import app from '../server';
 import { synthesizeSpeech, synthesizePhrase } from '../services/tts';
 import { getCache, setCache, deleteCache } from '../services/cache';
@@ -14,6 +14,11 @@ const mockedGetCache = vi.mocked(getCache);
 const mockedSetCache = vi.mocked(setCache);
 const mockedDeleteCache = vi.mocked(deleteCache);
 
+// Helper to mock consent granted for a student
+const mockConsentGranted = () => {
+  mockQuery.mockResolvedValueOnce({ rows: [{ consent_date: new Date().toISOString() }] });
+};
+
 describe('POST /api/v1/tts', () => {
   const token = generateTestToken(TEST_USERS.studentA);
 
@@ -22,6 +27,7 @@ describe('POST /api/v1/tts', () => {
   });
 
   it('should return audio/mpeg when TTS succeeds', async () => {
+    mockConsentGranted();
     mockedSynthesize.mockResolvedValueOnce({
       audioBuffer: Buffer.from('fake-mp3-data'),
       useBrowserTts: false,
@@ -38,6 +44,7 @@ describe('POST /api/v1/tts', () => {
   });
 
   it('should return { useBrowserTts: true } when circuit breaker falls back', async () => {
+    mockConsentGranted();
     mockedSynthesize.mockResolvedValueOnce({
       audioBuffer: null,
       useBrowserTts: true,
@@ -53,6 +60,7 @@ describe('POST /api/v1/tts', () => {
   });
 
   it('should return 400 when text is missing', async () => {
+    mockConsentGranted();
     const res = await request(app)
       .post('/api/v1/tts')
       .set('Cookie', `token=${token}`)
@@ -63,6 +71,7 @@ describe('POST /api/v1/tts', () => {
   });
 
   it('should return 400 when text exceeds 1000 characters', async () => {
+    mockConsentGranted();
     const longText = 'a'.repeat(1001);
 
     const res = await request(app)
@@ -84,6 +93,7 @@ describe('POST /api/v1/tts', () => {
   });
 
   it('should set Cache-Control: no-cache for transcript playback (no-store semantics)', async () => {
+    mockConsentGranted();
     mockedSynthesize.mockResolvedValueOnce({
       audioBuffer: Buffer.from('fake-mp3-data'),
       useBrowserTts: false,
@@ -112,6 +122,7 @@ describe('POST /api/v1/tts/phrase', () => {
   });
 
   it('should return audio/mpeg for valid phraseId on first request (cache MISS, default language en)', async () => {
+    mockConsentGranted();
     mockedSynthesizePhrase.mockResolvedValueOnce({
       audioBuffer: Buffer.from('fake-mp3-phrase-data'),
       useBrowserTts: false,
@@ -130,6 +141,7 @@ describe('POST /api/v1/tts/phrase', () => {
   });
 
   it('should return cached audio on second request for same phraseId and language (cache HIT)', async () => {
+    mockConsentGranted();
     mockedSynthesizePhrase
       .mockResolvedValueOnce({
         audioBuffer: Buffer.from('fake-mp3-phrase-data'),
@@ -162,6 +174,7 @@ describe('POST /api/v1/tts/phrase', () => {
   });
 
   it('should have separate cache entries per language (Hindi request does not hit English cache)', async () => {
+    mockConsentGranted();
     // First request in English
     mockedSynthesizePhrase.mockResolvedValueOnce({
       audioBuffer: Buffer.from('fake-mp3-en'),
@@ -174,6 +187,7 @@ describe('POST /api/v1/tts/phrase', () => {
       .send({ phraseId: 'good_job', language: 'en' });
 
     // Second request in Hindi - should be a cache MISS (different cache key)
+    mockConsentGranted();
     mockedSynthesizePhrase.mockResolvedValueOnce({
       audioBuffer: Buffer.from('fake-mp3-hi'),
       useBrowserTts: false,
@@ -192,6 +206,7 @@ describe('POST /api/v1/tts/phrase', () => {
   });
 
   it('should fall back to English when an unsupported language is requested', async () => {
+    mockConsentGranted();
     mockedSynthesizePhrase.mockResolvedValueOnce({
       audioBuffer: Buffer.from('fake-mp3-en'),
       useBrowserTts: false,
@@ -209,6 +224,7 @@ describe('POST /api/v1/tts/phrase', () => {
   });
 
   it('should return 400 when phraseId is missing', async () => {
+    mockConsentGranted();
     const res = await request(app)
       .post('/api/v1/tts/phrase')
       .set('Cookie', `token=${token}`)
@@ -220,6 +236,7 @@ describe('POST /api/v1/tts/phrase', () => {
   });
 
   it('should return 400 when phraseId is invalid', async () => {
+    mockConsentGranted();
     const res = await request(app)
       .post('/api/v1/tts/phrase')
       .set('Cookie', `token=${token}`)
@@ -231,6 +248,7 @@ describe('POST /api/v1/tts/phrase', () => {
   });
 
   it('should return 400 when language is not a string', async () => {
+    mockConsentGranted();
     const res = await request(app)
       .post('/api/v1/tts/phrase')
       .set('Cookie', `token=${token}`)
@@ -250,6 +268,7 @@ describe('POST /api/v1/tts/phrase', () => {
   });
 
   it('should return { useBrowserTts: true } when circuit breaker falls back for phrase', async () => {
+    mockConsentGranted();
     mockedSynthesizePhrase.mockResolvedValueOnce({
       audioBuffer: null,
       useBrowserTts: true,

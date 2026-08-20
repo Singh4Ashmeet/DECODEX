@@ -1,0 +1,87 @@
+version: 2
+updates:
+  # Backend dependencies
+  - package-ecosystem: "npm"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "security-team"
+    assignees:
+      - "security-team"
+    labels:
+      - "dependencies"
+      - "backend"
+    commit-message:
+      prefix: "[backend] "
+    groups:
+      dev-dependencies:
+        patterns:
+          - "*"
+        dependency-type: "development"
+      prod-dependencies:
+        patterns:
+          - "*"
+        dependency-type: "production"
+    # Auto-merge for patch and minor updates that pass tests
+    allow:
+      - dependency-type: "all"
+    ignore:
+      # Ignore major version updates for critical packages
+      - dependency-name: "express"
+        update-type: "version-update:semver-major"
+      - dependency-name: "typescript"
+        update-type: "version-update:semver-major"
+      - dependency-name: "vitest"
+        update-type: "version-update:semver-major"
+
+  # Frontend dependencies
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "frontend-team"
+    assignees:
+      - "frontend-team"
+    labels:
+      - "dependencies"
+      - "frontend"
+    commit-message:
+      prefix: "[frontend] "
+    groups:
+      dev-dependencies:
+        patterns:
+          - "*"
+        dependency-type: "development"
+      prod-dependencies:
+        patterns:
+          - "*"
+        dependency-type: "production"
+    ignore:
+      - dependency-name: "react"
+        update-type: "version-update:semver-major"
+      - dependency-name: "vite"
+        update-type: "version-update:semver-major"
+      - dependency-name: "tailwindcss"
+        update-type: "version-update:semver-major"
+
+  # Docker base images
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "[docker] "
