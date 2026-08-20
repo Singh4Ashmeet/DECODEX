@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+.env.local
+coverage/
+uploads/
+*.log
+.DS_Store
+.venv/
+__pycache__/
+dump.rdb
+scratch/
+

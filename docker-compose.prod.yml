@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: decodex
+      POSTGRES_PASSWORD: decodex_password
+      POSTGRES_DB: decodex_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U decodex -d decodex_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - PORT=3000
+      - DATABASE_URL=postgresql://decodex:decodex_password@db:5432/decodex_db
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=production_hackathon_super_secret_key_change_me
+      - OPENAI_API_KEY=${OPENAI_API_KEY} # Must be provided in .env or shell
+      - AUDIO_STORAGE_PROVIDER=local
+      - AUDIO_STORAGE_PATH=/app/audio-storage
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_audio:/app/audio-storage
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  redisdata:
+  backend_uploads:
+  backend_audio:

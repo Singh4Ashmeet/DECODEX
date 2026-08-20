@@ -1,0 +1,36 @@
+# Image assets - treat as binary to prevent line-ending corruption
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.svg binary
+*.avif binary
+
+# Font assets
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.otf binary
+
+# Audio/Video
+*.mp3 binary
+*.mp4 binary
+*.webm binary
+*.ogg binary
+*.wav binary
+
+# Archives
+*.zip binary
+*.tar binary
+*.gz binary
+*.rar binary
+
+# Other binary formats
+*.pdf binary
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary

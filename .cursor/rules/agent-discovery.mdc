@@ -1,0 +1,34 @@
+---
+description: Decodex agent discovery, skill loading, and community skill routing.
+alwaysApply: true
+---
+
+# Decodex Agent Discovery
+
+Start every Decodex task by reading `AGENTS.md`. Treat it as the authoritative entry point for repo context, local project skills, and workflow guardrails.
+
+## Skill Loading Order
+
+1. Load the relevant Decodex-specific skill from `.cursor/skills/`.
+2. Load community skills from `.agents/skills/` only as supplemental implementation guidance.
+3. When instructions conflict, prefer `AGENTS.md` and the Decodex-specific skill over community skills.
+
+## Community Skill Cross-References
+
+| Task | Decodex skill first | Community skill supplement |
+|------|---------------------|----------------------------|
+| React UI, routes, hooks, Tailwind | `.cursor/skills/decodex-frontend/SKILL.md` | `.agents/skills/vercel-react-best-practices/SKILL.md`, `.agents/skills/frontend-design/SKILL.md` |
+| Browser or E2E verification | `.cursor/skills/decodex-frontend/SKILL.md`, `.cursor/skills/decodex-dev-workflow/SKILL.md` | `.agents/skills/webapp-testing/SKILL.md`, `.agents/skills/e2e-testing-patterns/SKILL.md` |
+| Express APIs, middleware, auth, queues | `.cursor/skills/decodex-backend/SKILL.md` | `.agents/skills/nodejs-backend-patterns/SKILL.md` |
+| Shared TypeScript types or strict API contracts | `.cursor/skills/decodex-backend/SKILL.md` or `.cursor/skills/decodex-frontend/SKILL.md` | `.agents/skills/typescript-advanced-types/SKILL.md` |
+| STT, alignment, classification, drills | `.cursor/skills/decodex-ai-pipeline/SKILL.md`, `.cursor/skills/decodex-domain/SKILL.md` | `.agents/skills/nodejs-backend-patterns/SKILL.md` only for generic service patterns |
+
+## Reproducible Install
+
+Community skills are locked in `skills-lock.json`. Restore them with:
+
+```bash
+npm run skills:install
+```
+
+Use `npm run skills:update` only when intentionally refreshing skills from the registry.
