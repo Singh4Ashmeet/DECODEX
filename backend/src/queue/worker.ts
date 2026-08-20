@@ -130,17 +130,19 @@ export async function processAudioJob(data: AudioJobData): Promise<{ success: bo
   }
 }
 
-// Bull queue worker delegates to the shared processAudioJob function
-audioQueue.process(async (job) => {
-  return processAudioJob(job.data as AudioJobData);
-});
+// Bull queue worker delegates to the shared processAudioJob function — skip queue processing in test env
+if (process.env.NODE_ENV !== 'test') {
+  audioQueue.process(async (job) => {
+    return processAudioJob(job.data as AudioJobData);
+  });
 
-consentErasureQueue.process(async () => {
-  return eraseExpiredConsentData();
-});
+  consentErasureQueue.process(async () => {
+    return eraseExpiredConsentData();
+  });
 
-scheduleConsentErasureJob().catch(() => {
-  logger.error('Failed to schedule the daily consent erasure job.');
-});
+  scheduleConsentErasureJob().catch(() => {
+    logger.error('Failed to schedule the daily consent erasure job.');
+  });
 
-logger.info('Audio processing worker started.');
+  logger.info('Audio processing worker started.');
+}

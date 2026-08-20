@@ -170,13 +170,13 @@ Student companion avatar (`DexAvatar.tsx`) renders state-based visuals (idle, sp
 │   │   ├── db/                  # Schema, migrations (init.ts, schema.sql, migration_v2-v11.sql, seed.sql), analytics, index.ts
 │   │   ├── lib/                 # logger.ts (Pino)
 │   │   ├── scripts/             # migrate.ts, seed-prod.ts, reset-database.ts, backfill-audio-base64.ts
-│   │   └── __tests__/           # Backend test suite (vitest) — auth, alignment-reversals, assignments, classification-corrections, consent-security, consent-kbv-hardening, copilot-parent-language, copilot-scope, dex-transcribe-language, dex-grading, gamification-streak-freeze, parent-dashboard, queue-dead-letter, rate-limiting, reading-preferences, sessions-idor, tts, worker-stt-language
+│   │   └── __tests__/           # Backend test suite (vitest — 22 files) — alignment-reversals, assignments, auth, classification-corrections, classifier, consent-security, consent-kbv-hardening, copilot-parent-language, copilot-scope, csrf, dex-grading, dex-transcribe-language, gamification-streak-freeze, healthScore, parent-dashboard, queue-dead-letter, rate-limiting, reading-preferences, server, sessions-idor, tts, worker-stt-language
 │   ├── vitest.config.ts
 │   └── tsconfig.json
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/               # Route page components (LandingPage, Login, Register, Dashboard, PassageSelection, SessionActive, SessionResults, PracticePage, TeacherDashboard, StudentDetail, ParentHome, ParentSessionReport, ConsentConfirm, PrivacyPolicy, TermsOfService, LearningPathPage, StoryReaderPage, CopilotPanel)
-│   │   ├── components/          # Shared UI (DexAvatar, ConfettiBurst, AnnotatedText, AudioRecorder, DrillCard, DexVoiceCommands, DexNavigationGuide, ReadingPreferencesPanel, ProtectedRoute, AssignmentManager, AnimatedCounter, Skeleton)
+│   │   ├── components/          # Shared UI (ErrorBoundary, DexAvatar, ConfettiBurst, AnnotatedText, AudioRecorder, DrillCard, DexVoiceCommands, DexNavigationGuide, ReadingPreferencesPanel, ProtectedRoute, AssignmentManager, AnimatedCounter, Skeleton)
 │   │   ├── hooks/               # Custom hooks (useDex, useSessionSSE, useReadingPreferences)
 │   │   ├── lib/                 # API client (api.ts), constants
 │   │   ├── context/             # AuthContext, ThemeContext

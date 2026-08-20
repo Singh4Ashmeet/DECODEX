@@ -21,6 +21,7 @@ import analyticsRoutes from './routes/analytics';
 import teacherRoutes from './routes/teacher';
 import consentRoutes from './routes/consent';
 import studentRoutes from './routes/students';
+import { csrfProtection } from './middleware/csrf';
 
 // V2 route modules — AI Intervention Platform
 import healthScoreRoutes from './routes/healthScore';
@@ -40,8 +41,12 @@ import dexRoutes from './routes/dex';
 // Initialize DB schema & migrations
 import { initDBWithRetry } from './db/init';
 
-// Initialize background workers
-import './queue/worker';
+// Initialize background workers — skip in test env to avoid spinning Bull
+// worker processes in every vitest fork (which can crash on Redis-unavailable
+// queue error paths and produce flaky tests).
+if (process.env.NODE_ENV !== 'test') {
+  import('./queue/worker');
+}
 
 dotenv.config();
 
@@ -122,6 +127,10 @@ export const globalLimiter = isTest
 
 app.use(express.json());
 app.use(cookieParser());
+
+// CSRF defense — checks Origin/Referer on state-changing requests.
+// No-op in test env (see middleware/csrf.ts).
+app.use('/api/v1', csrfProtection);
 
 // Apply strict rate limiter to auth endpoints
 app.use('/api/v1/auth/register', authLimiter);
