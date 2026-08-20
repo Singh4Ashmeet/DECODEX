@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  decodex-db:
+    image: postgres:15-alpine
+    container_name: decodex-db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: decodex
+    ports:
+      - "5433:5432"
+    volumes:
+      - decodex_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  decodex-redis:
+    image: redis:7-alpine
+    container_name: decodex-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - decodex_redisdata:/data
+    restart: unless-stopped
+
+volumes:
+  decodex_pgdata:
+  decodex_redisdata:

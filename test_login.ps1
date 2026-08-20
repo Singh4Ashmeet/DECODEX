@@ -1,0 +1,2 @@
+$json = '{"email":"teacher@decodex.com","password":"password123"}'
+curl.exe -s -X POST https://decodex-backend.onrender.com/api/v1/auth/login -H "Content-Type: application/json" -d $json -c cookies.txt -v 2>&1

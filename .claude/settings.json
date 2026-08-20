@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'feat: comprehensive updates across backend and frontend *)",
+      "Bash(git push *)",
+      "Bash(git commit *)",
+      "Bash(git rebase *)",
+      "Bash(git reset *)"
+    ]
+  }
+}

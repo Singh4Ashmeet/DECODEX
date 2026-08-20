@@ -1,0 +1,508 @@
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+@theme {
+  /* Default tokens (no theme applied = neutral/onboarding) */
+  --font-display: "Nunito Sans", sans-serif;
+  --font-body: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", sans-serif;
+  --font-mono: "Fira Code", monospace;
+  --color-primary: #006474;
+  --color-on-primary: #ffffff;
+  --color-secondary: #865300;
+  --color-accent: #d97706;
+  --color-background: #fff8f5;
+  --color-foreground: #1e1b18;
+  --color-muted: #f5ece7;
+  --color-border: rgba(233,225,220,0.6);
+
+  /* Risk tier semantic colors */
+  --risk-excellent-bg: #d1fae5;
+  --risk-excellent-text: #065f46;
+  --risk-excellent-border: #10b981;
+  --risk-good-bg: #dcfce7;
+  --risk-good-text: #166534;
+  --risk-good-border: #22c55e;
+  --risk-medium-bg: #fef3c7;
+  --risk-medium-text: #92400e;
+  --risk-medium-border: #f59e0b;
+  --risk-high-bg: #fed7aa;
+  --risk-high-text: #9a3412;
+  --risk-high-border: #f97316;
+  --risk-critical-bg: #fecaca;
+  --risk-critical-text: #991b1b;
+  --risk-critical-border: #ef4444;
+}
+
+[data-theme="teacher"] {
+  --color-primary: #1E40AF;
+  --color-on-primary: #FFFFFF;
+  --color-secondary: #3B82F6;
+  --color-accent: #D97706;
+  --color-background: #F8FAFC;
+  --color-foreground: #1E3A8A;
+  --color-muted: #E9EEF6;
+  --color-border: #DBEAFE;
+  
+  --font-display: "Fira Sans", sans-serif;
+  --font-body: "Fira Sans", sans-serif;
+  --font-mono: "Fira Code", monospace;
+}
+
+[data-theme="student"] {
+  --color-primary: #2563EB;
+  --color-on-primary: #FFFFFF;
+  --color-secondary: #F59E0B;
+  --color-accent: #EC4899;
+  --color-background: #EFF6FF;
+  --color-foreground: #0F172A;
+  --color-muted: #F1F5FD;
+  --color-border: #E4ECFC;
+
+  --font-display: "Baloo 2", sans-serif;
+  --font-body: "Comic Neue", cursive;
+  --font-mono: "Fira Code", monospace;
+}
+
+@layer utilities {
+  /* ─── Glass Card System ─────────────────────────────────── */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 0 8px 32px 0 rgba(45, 41, 38, 0.06), inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+    border-radius: 1rem;
+    padding: 1rem;
+  }
+
+  [data-theme="student"] .glass-card {
+    border-radius: 1.5rem;
+    box-shadow: 0 8px 28px rgba(37, 99, 235, 0.15), inset 0 1px 0 rgba(255,255,255,0.9);
+    border: 3px solid var(--color-border);
+  }
+
+  [data-theme="teacher"] .glass-card {
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 10px rgba(30, 58, 138, 0.05);
+    border: 1px solid var(--color-border);
+  }
+
+  .glass-card-hover {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .glass-card-hover:hover {
+    transform: translateY(-4px);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 16px 40px 0 rgba(0, 100, 116, 0.12), inset 0 1px 0 0 rgba(255, 255, 255, 1);
+  }
+
+  .glass-header {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px) saturate(190%);
+    -webkit-backdrop-filter: blur(20px) saturate(190%);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .glass-input {
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1.5px solid var(--color-border);
+    transition: all 0.2s ease;
+  }
+  
+  .glass-input:focus {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+  }
+
+  /* ─── Button System ──────────────────────────────────────── */
+  .btn-clay {
+    border-radius: 9999px;
+    font-weight: 700;
+    transition: transform 0.15s, box-shadow 0.15s;
+    /* Fallback for pages without data-theme (login, register) */
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
+    box-shadow: 0 2px 8px rgba(0, 100, 116, 0.18);
+  }
+
+  .btn-clay:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0, 100, 116, 0.22);
+  }
+
+  [data-theme="student"] .btn-clay {
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
+    box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.15), 0 4px 6px rgba(37, 99, 235, 0.2);
+  }
+  
+  [data-theme="student"] .btn-clay:hover {
+    transform: translateY(-1px);
+    box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.15), 0 6px 12px rgba(37, 99, 235, 0.25);
+  }
+
+  [data-theme="teacher"] .btn-clay {
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
+    border-radius: 0.5rem;
+    font-weight: 600;
+    font-family: "Fira Sans", sans-serif;
+    box-shadow: 0 2px 6px rgba(30, 58, 138, 0.15);
+    transition: background-color 0.15s, box-shadow 0.15s;
+  }
+
+  [data-theme="teacher"] .btn-clay:hover {
+    background-color: #1e3a8a;
+    box-shadow: 0 4px 12px rgba(30, 58, 138, 0.25);
+  }
+
+  /* ─── Risk Tier Badges ───────────────────────────────────── */
+  .badge-risk {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 9999px;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border: 1px solid;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+
+  .risk-excellent { --risk-bg: var(--risk-excellent-bg); --risk-text: var(--risk-excellent-text); --risk-border: var(--risk-excellent-border); }
+  .risk-good { --risk-bg: var(--risk-good-bg); --risk-text: var(--risk-good-text); --risk-border: var(--risk-good-border); }
+  .risk-medium { --risk-bg: var(--risk-medium-bg); --risk-text: var(--risk-medium-text); --risk-border: var(--risk-medium-border); }
+  .risk-high { --risk-bg: var(--risk-high-bg); --risk-text: var(--risk-high-text); --risk-border: var(--risk-high-border); }
+  .risk-critical { --risk-bg: var(--risk-critical-bg); --risk-text: var(--risk-critical-text); --risk-border: var(--risk-critical-border); }
+
+  .badge-risk {
+    background-color: var(--risk-bg);
+    color: var(--risk-text);
+    border-color: var(--risk-border);
+  }
+
+  /* ─── O-G Category Chips ─────────────────────────────────── */
+  .cat-rev { --cat-bg: #e9d5ff; --cat-text: #6b21a8; --cat-border: #a855f7; }
+  .cat-sub { --cat-bg: #fef08a; --cat-text: #854d0e; --cat-border: #eab308; }
+  .cat-omi { --cat-bg: #d1fae5; --cat-text: #065f46; --cat-border: #10b981; }
+  .cat-ins { --cat-bg: #ffedd5; --cat-text: #9a3412; --cat-border: #f97316; }
+  .cat-bld { --cat-bg: #ffedd5; --cat-text: #9a3412; --cat-border: #f97316; }
+  .cat-pac { --cat-bg: #ccfbf1; --cat-text: #134e4a; --cat-border: #14b8a6; }
+  .cat-unc { --cat-bg: #bae6fd; --cat-text: #075985; --cat-border: #0ea5e9; }
+
+  .badge-cat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 9999px;
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border: 1px solid;
+    background-color: var(--cat-bg);
+    color: var(--cat-text);
+    border-color: var(--cat-border);
+  }
+
+  /* ─── Stat Card Pattern ──────────────────────────────────── */
+  .stat-card {
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 0 8px 32px 0 rgba(45, 41, 38, 0.06), inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+    border-radius: 1rem;
+    padding: 1rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  /* Opt-in horizontal flex layout for stat cards (dashboard metrics etc.) */
+  .stat-card-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  /* Opt-in hover lift effect for interactive stat cards */
+  .stat-card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px 0 rgba(45, 41, 38, 0.1), inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+  }
+
+  .stat-card-border {
+    border-left-width: 4px;
+  }
+
+  .stat-icon {
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .stat-value {
+    font-family: var(--font-display);
+    font-size: 1.75rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .stat-sublabel {
+    font-family: var(--font-body);
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+  }
+
+  /* ─── Gradient Stat Card for Results ─────────────────────── */
+  .stat-card-gradient {
+    border-radius: 1.5rem;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 0 8px 32px 0 rgba(45, 41, 38, 0.06);
+  }
+
+  /* ─── Pulse Glow Animation ───────────────────────────────── */
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+    50% { box-shadow: 0 0 0 12px rgba(16, 185, 129, 0); }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  /* ─── Dyslexia-Friendly Text Utilities ───────────────────── */
+  .text-dyslexia-friendly {
+    font-family: var(--font-body);
+    letter-spacing: 0.04em;
+    line-height: 1.7;
+  }
+
+  /* student-text only activates under the student theme — prevents
+     unauthenticated pages (login, register) from getting giant text */
+  [data-theme="student"] .student-text {
+    font-family: var(--font-body);
+    font-size: clamp(1.125rem, 2vw, 1.5rem);
+    line-height: 1.7;
+    letter-spacing: 0.03em;
+  }
+
+  .teacher-mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─── Reading Chunk Buttons (StoryReader) ────────────────── */
+  .reading-chunk {
+    display: inline-block;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.75rem;
+    font-family: var(--font-body);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px solid transparent;
+  }
+
+  .reading-chunk-active {
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3), 0 4px 12px rgba(37, 99, 235, 0.2);
+    transform: scale(1.05);
+  }
+
+  .reading-chunk-mastered {
+    background-color: var(--risk-excellent-bg);
+    color: var(--risk-excellent-text);
+    border-color: var(--risk-excellent-border);
+  }
+
+  .reading-chunk-mastered:hover {
+    background-color: var(--risk-excellent-border);
+    color: white;
+  }
+
+  .reading-chunk-struggled {
+    background-color: var(--risk-medium-bg);
+    color: var(--risk-medium-text);
+    border-color: var(--risk-medium-border);
+  }
+
+  .reading-chunk-struggled:hover {
+    background-color: var(--risk-medium-border);
+    color: white;
+  }
+
+  .reading-chunk-pending {
+    background-color: rgba(255, 255, 255, 0.6);
+    color: var(--color-foreground);
+    border-color: var(--color-border);
+  }
+
+  .reading-chunk-pending:hover {
+    background-color: rgba(255, 255, 255, 0.9);
+  }
+
+  /* ─── Table Row Hover ────────────────────────────────────── */
+  .table-row-hover {
+    transition: background-color 0.15s ease;
+  }
+
+  .table-row-hover:hover {
+    background-color: rgba(255, 255, 255, 0.4);
+  }
+
+  [data-theme="teacher"] .table-row-hover:hover {
+    background-color: rgba(30, 58, 138, 0.03);
+  }
+
+  /* ─── Risk Dot Indicator ─────────────────────────────────── */
+  .risk-dot {
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    border: 2px solid white;
+    flex-shrink: 0;
+  }
+
+  .risk-dot-excellent { background-color: var(--risk-excellent-border); }
+  .risk-dot-good { background-color: var(--risk-good-border); }
+  .risk-dot-medium { background-color: var(--risk-medium-border); }
+  .risk-dot-high { background-color: var(--risk-high-border); }
+  .risk-dot-critical { background-color: var(--risk-critical-border); }
+
+  /* ─── Progress Bar ───────────────────────────────────────── */
+  .progress-bar {
+    height: 0.5rem;
+    border-radius: 9999px;
+    overflow: hidden;
+    background-color: var(--color-muted);
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    border-radius: 9999px;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* ─── Empty State ────────────────────────────────────────── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    text-align: center;
+  }
+
+  .empty-state-icon {
+    width: 4rem;
+    height: 4rem;
+    border-radius: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+  }
+
+  /* ─── Focus Visible ──────────────────────────────────────── */
+  .focus-visible-ring:focus-visible {
+    outline: none;
+    ring: 2px;
+    ring-color: var(--color-primary);
+    ring-offset: 2px;
+  }
+
+  /* ─── Reduced Motion ─────────────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ─── Global Body Styles ──────────────────────────────────── */
+body {
+  background: radial-gradient(circle at 10% 20%, rgba(227, 246, 250, 0.6) 0%, rgba(255, 248, 245, 1) 85%);
+  background-attachment: fixed;
+  color: var(--color-foreground);
+  font-family: var(--font-body);
+  min-height: 100vh;
+}
+
+:root[data-theme="student"] body {
+  background: radial-gradient(circle at 10% 20%, rgba(239, 246, 255, 0.6) 0%, rgba(228, 236, 252, 1) 85%);
+}
+
+:root[data-theme="teacher"] body {
+  background: #F8FAFC;
+}
+
+/* Student animated background blobs */
+:root[data-theme="student"] body::before {
+  content: '';
+  position: fixed;
+  top: -10%;
+  left: -10%;
+  width: 40vw;
+  height: 40vw;
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.08), transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -1;
+  animation: floatBlob1 18s ease-in-out infinite;
+}
+
+:root[data-theme="student"] body::after {
+  content: '';
+  position: fixed;
+  bottom: -10%;
+  right: -5%;
+  width: 35vw;
+  height: 35vw;
+  background: radial-gradient(circle, rgba(236, 72, 153, 0.07), transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -1;
+  animation: floatBlob2 22s ease-in-out infinite;
+}
+
+@keyframes floatBlob1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(3vw, 4vh) scale(1.05); }
+  66% { transform: translate(-2vw, 2vh) scale(0.97); }
+}
+
+@keyframes floatBlob2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  40% { transform: translate(-3vw, -3vh) scale(1.06); }
+  70% { transform: translate(2vw, -1vh) scale(0.98); }
+}
