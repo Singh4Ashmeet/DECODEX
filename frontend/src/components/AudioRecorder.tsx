@@ -138,7 +138,9 @@ export default function AudioRecorder({ onRecordingComplete, disabled = false, d
             ></div>
             
             <button 
-              className="relative z-10 w-24 h-24 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-2xl transition-transform duration-75 group"
+              onClick={stopRecording}
+              aria-label="Stop recording"
+              className="relative z-10 w-24 h-24 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-2xl transition-transform duration-75 group cursor-pointer"
               style={{ transform: `scale(${1 + (audioLevel / 100) * 0.15})` }}
             >
               <span className="material-symbols-outlined text-5xl animate-pulse" style={{fontVariationSettings: "'FILL' 1"}}>mic</span>

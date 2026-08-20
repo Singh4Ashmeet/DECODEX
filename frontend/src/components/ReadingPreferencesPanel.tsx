@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, RotateCcw } from 'lucide-react';
 import { useReadingPreferences, type ReadingPreferences, DEFAULT_PREFERENCES } from '../hooks/useReadingPreferences';
 
@@ -10,6 +10,10 @@ interface ReadingPreferencesPanelProps {
 export default function ReadingPreferencesPanel({ isOpen, onClose }: ReadingPreferencesPanelProps) {
   const { preferences, loading, updatePreferences, resetToDefaults } = useReadingPreferences();
   const [localPrefs, setLocalPrefs] = useState<ReadingPreferences>(preferences);
+
+  useEffect(() => {
+    setLocalPrefs(preferences);
+  }, [preferences]);
 
   const previewText = "The quick brown fox jumps over the lazy dog. She reads each word with care and confidence.";
 
