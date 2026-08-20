@@ -1,0 +1,288 @@
+# Semgrep Configuration for Decodex Security Rules
+# Run with: semgrep --config=.semgrep.yml
+
+rules:
+  # ────────────────────────────────────────────────────────────────────────────
+  # SQL Injection Prevention
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: no-sql-string-concatenation
+    pattern-either:
+      - pattern: query(`SELECT ... + $X + ...`, ...)
+      - pattern: query(`INSERT ... + $X + ...`, ...)
+      - pattern: query(`UPDATE ... + $X + ...`, ...)
+      - pattern: query(`DELETE ... + $X + ...`, ...)
+      - pattern: client.query(`... + $X + ...`, ...)
+    message: "Possible SQL injection via string concatenation. Use parameterized queries."
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-89"
+      owasp: "A03:2021 - Injection"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # No PII in Logs
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: no-pii-in-console-log
+    pattern-either:
+      - pattern: console.log(..., { ..., email: $X, ... }, ...)
+      - pattern: console.log(..., { ..., name: $X, ... }, ...)
+      - pattern: console.log(..., { ..., display_name: $X, ... }, ...)
+      - pattern: console.log(..., { ..., date_of_birth: $X, ... }, ...)
+      - pattern: console.error(..., { ..., email: $X, ... }, ...)
+      - pattern: console.error(..., { ..., name: $X, ... }, ...)
+      - pattern: console.warn(..., { ..., email: $X, ... }, ...)
+      - pattern: logger.info(..., { ..., email: $X, ... }, ...)
+      - pattern: logger.error(..., { ..., email: $X, ... }, ...)
+      - pattern: logger.warn(..., { ..., email: $X, ... }, ...)
+    message: "PII (email, name, DOB) should not be logged. Use userId/UUID instead."
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: privacy
+      regulation: "DPDP Act 2023, COPPA, GDPR"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # JWT in httpOnly Cookie
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: jwt-in-http-only-cookie
+    pattern-either:
+      - pattern: res.cookie('token', $X, { ..., httpOnly: false, ... })
+      - pattern: res.cookie('token', $X, { ..., httpOnly: $FALSE, ... })
+    message: "JWT tokens must be stored in httpOnly cookies."
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-614"
+
+  - id: jwt-cookie-secure-flag
+    pattern: res.cookie('token', $X, { ..., secure: false, ... })
+    message: "JWT cookies must have secure: true in production."
+    languages: [typescript, javascript]
+    severity: WARNING
+    metadata:
+      category: security
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Rate Limiting on Auth Endpoints
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: missing-auth-rate-limit
+    pattern: app.use('/api/v1/auth/...', $FUNC)
+    pattern-not:
+      pattern-either:
+        - pattern: app.use('/api/v1/auth/...', authLimiter)
+        - pattern: app.use('/api/v1/auth/...', rateLimit(...))
+    message: "Auth endpoints must have rate limiting."
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-307"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Audio Upload Size Limit
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: audio-upload-size-limit
+    pattern: upload.single('audio')
+    pattern-not:
+      pattern: upload.single('audio', { limits: { fileSize: 10 * 1024 * 1024 } })
+    message: "Audio uploads must have 10MB size limit."
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: security
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Consent Check on Audio Endpoints
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: missing-consent-on-audio
+    pattern-either:
+      - pattern: router.post('/.../audio', ..., async ...)
+      - pattern: router.post('/.../transcribe', ..., async ...)
+    pattern-not:
+      pattern-either:
+        - pattern: router.post('/.../audio', ..., requireConsent, ...)
+        - pattern: router.post('/.../transcribe', ..., requireConsent, ...)
+    message: "Audio endpoints must require parental consent middleware."
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: privacy
+      regulation: "DPDP Act 2023, COPPA"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # IDOR Protection - Ownership Check
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: missing-ownership-check
+    pattern-either:
+      - pattern: router.get('/.../:id/...', authenticate, async ($REQ, $RES) => { ... })
+      - pattern: router.post('/.../:id/...', authenticate, async ($REQ, $RES) => { ... })
+    pattern-not:
+      pattern-either:
+        - pattern: ... WHERE ... = $REQ.user?.id ...
+        - pattern: ... student_id = $REQ.user?.id ...
+        - pattern: ... WHERE ... = $REQ.user.id ...
+    message: "Endpoints accessing user data must verify ownership (student_id = req.user.id)."
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-639"
+      owasp: "A01:2021 - Broken Access Control"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # No Raw Audio in Database
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: no-raw-audio-columns
+    pattern-either:
+      - pattern: CREATE TABLE ... ( ..., audio_base64 ..., ... )
+      - pattern: CREATE TABLE ... ( ..., audio_file_path ..., ... )
+      - pattern: CREATE TABLE ... ( ..., audio_blob ..., ... )
+      - pattern: ALTER TABLE ... ADD COLUMN ... audio_base64 ...
+      - pattern: ALTER TABLE ... ADD COLUMN ... audio_file_path ...
+      - pattern: ALTER TABLE ... ADD COLUMN ... audio_blob ...
+    message: "Raw audio must not be stored in database. Use object storage (audio_storage_key)."
+    languages: [sql]
+    severity: ERROR
+    metadata:
+      category: privacy
+      regulation: "DPDP Act 2023, COPPA"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # UUIDs Instead of Sequential IDs
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: use-uuid-primary-key
+    pattern: CREATE TABLE $TABLE ( ..., id SERIAL PRIMARY KEY, ... )
+    message: "Use UUID primary keys (uuid_generate_v4()) instead of sequential IDs to prevent IDOR."
+    languages: [sql]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-639"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # PII Encryption
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: pii-fields-should-be-encrypted
+    pattern-either:
+      - pattern: INSERT INTO users (..., email, ...) VALUES (..., $EMAIL, ...)
+      - pattern: INSERT INTO users (..., display_name, ...) VALUES (..., $NAME, ...)
+      - pattern: UPDATE users SET email = $EMAIL ...
+      - pattern: UPDATE users SET display_name = $NAME ...
+    pattern-not:
+      pattern-either:
+        - pattern: encryptUserPII(...)
+        - pattern: encryptPII(...)
+    message: "PII fields (email, display_name, date_of_birth) must be encrypted before storage."
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: privacy
+      regulation: "DPDP Act 2023, GDPR"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Role Immutability
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: no-role-modification-endpoint
+    pattern-either:
+      - pattern: router.patch('/.../role', ...)
+      - pattern: router.put('/.../role', ...)
+      - pattern: router.post('/auth/change-role', ...)
+      - pattern: $REQ.body.role = $X
+    message: "User roles must not be modifiable via API. Role changes require admin DB access."
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-269"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # CORS Allowlist
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: cors-no-wildcard
+    pattern: cors({ origin: true, ... })
+    pattern-not:
+      pattern: cors({ origin: $ARRAY, ... })
+    message: "CORS must use explicit origin allowlist, not wildcard."
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: security
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Helmet Security Headers
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: missing-helmet
+    pattern: const app = express()
+    pattern-not:
+      pattern: app.use(helmet())
+    message: "Express app must use helmet() for security headers."
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: security
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Input Validation
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: missing-input-validation
+    pattern-either:
+      - pattern: router.post('/...', async ($REQ, $RES) => { $REQ.body.$FIELD ... })
+      - pattern: router.put('/...', async ($REQ, $RES) => { $REQ.body.$FIELD ... })
+    pattern-not:
+      pattern-either:
+        - pattern: if (!$REQ.body.$FIELD) { return $RES.status(400)... }
+        - pattern: zod.parse($REQ.body)
+        - pattern: validate($REQ.body)
+    message: "All request bodies must be validated before use."
+    languages: [typescript, javascript]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-20"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # No PII in LLM Prompts
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: no-pii-in-llm-prompt
+    pattern-either:
+      - pattern: client.chat.completions.create({ ..., messages: [... { role: "user", content: $CONTENT } ...] })
+      - pattern: openai.chat.completions.create({ ..., messages: [... { role: "user", content: $CONTENT } ...] })
+    metavariable-regex:
+      metavariable: $CONTENT
+      regex: "(student|child|name|email|grade|school|DOB|date_of_birth|parent)"
+    message: "LLM prompts must not contain student PII. Use only anonymized alignment data."
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: privacy
+      regulation: "DPDP Act 2023, COPPA, GDPR"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Soft Delete Pattern
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: missing-soft-delete
+    pattern: DELETE FROM $TABLE WHERE ...
+    pattern-not:
+      pattern: UPDATE $TABLE SET deleted_at = NOW() WHERE ...
+    message: "Use soft delete (UPDATE deleted_at = NOW()) instead of hard DELETE for user data."
+    languages: [sql, typescript, javascript]
+    severity: WARNING
+    metadata:
+      category: privacy
+      regulation: "DPDP Act 2023, GDPR Art. 17"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Consent Expiry Check
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: consent-expiry-check
+    pattern: getConsentStatus($STUDENT_ID)
+    pattern-not:
+      pattern: getConsentStatus($STUDENT_ID)
+    message: "Consent status must check 365-day expiry and withdrawn_at."
+    languages: [typescript, javascript]
+    severity: WARNING
+    metadata:
+      category: privacy
+      regulation: "DPDP Act 2023, COPPA"

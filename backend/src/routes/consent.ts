@@ -5,7 +5,7 @@ import bcrypt from 'bcrypt';
 import { pool, query } from '../db';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
-import { sendConsentEmail, sendConsentWithdrawalEmail, sendPasswordResetEmail } from '../services/email';
+import { sendConsentEmail, sendConsentWithdrawalEmail, sendPasswordResetEmail, sendConsentRenewalEmail } from '../services/email';
 import { eraseConsentDataForLink } from '../queue/consentErasure';
 
 const router = Router();
@@ -571,6 +571,90 @@ router.post('/:token/confirm', consentConfirmLimiter, async (req, res) => {
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Server error' } });
   } finally {
     client.release();
+  }
+});
+
+// POST /api/v1/consent/:linkId/renew
+// Send a new consent email for renewal (when consent is expiring or expired)
+router.post('/:linkId/renew', authenticate, requireRole(['parent', 'admin']), async (req: AuthRequest, res: Response) => {
+  const { linkId } = req.params;
+
+  if (typeof linkId !== 'string' || !isUuid(linkId)) {
+    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid consent link ID' } });
+  }
+
+  try {
+    // Verify the link belongs to this parent
+    const linkResult = await query(
+      [
+        'SELECT link.id, link.parent_id, link.student_id, parent.email AS parent_email, student.display_name AS student_name, link.consent_granted, link.withdrawn_at',
+        'FROM parent_student_links link',
+        'JOIN users parent ON parent.id = link.parent_id',
+        'JOIN users student ON student.id = link.student_id',
+        'WHERE link.id = $1 AND link.parent_id = $2',
+        'AND student.deleted_at IS NULL AND parent.deleted_at IS NULL',
+      ].join('\n'),
+      [linkId, req.user!.id]
+    );
+    const link = linkResult.rows[0] as {
+      id: string;
+      parent_id: string;
+      student_id: string;
+      parent_email: string;
+      student_name: string;
+      consent_granted: boolean;
+      withdrawn_at: string | Date | null;
+    } | undefined;
+
+    if (!link) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Consent link not found' } });
+    }
+
+    // Invalidate any existing unused consent tokens
+    await query(
+      [
+        'UPDATE consent_tokens',
+        'SET expires_at = NOW()',
+        'WHERE student_id = $1 AND parent_id = $2 AND used_at IS NULL',
+      ].join('\n'),
+      [link.student_id, link.parent_id]
+    );
+
+    // Issue new consent token
+    await issueConsentToken(link.parent_id, link.student_id, link.parent_email, link.student_name);
+
+    res.json({ consent_renewal_email_sent: true });
+  } catch {
+    console.error('Failed to send consent renewal email.');
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Server error' } });
+  }
+});
+
+// GET /api/v1/consent/expiring
+// List consents expiring within 30 days (for parent dashboard notification)
+router.get('/expiring', authenticate, requireRole(['parent', 'admin']), async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await query(
+      [
+        'SELECT link.id, link.student_id, student.display_name, link.consent_date,',
+        "link.consent_date + INTERVAL '365 days' AS expires_at,",
+        'link.consent_granted, link.withdrawn_at',
+        'FROM parent_student_links link',
+        'JOIN users student ON student.id = link.student_id',
+        'WHERE link.parent_id = $1',
+        'AND link.consent_granted = TRUE',
+        'AND link.withdrawn_at IS NULL',
+        "AND link.consent_date + INTERVAL '365 days' <= NOW() + INTERVAL '30 days'",
+        'AND student.deleted_at IS NULL',
+        'ORDER BY link.consent_date ASC',
+      ].join('\n'),
+      [req.user!.id]
+    );
+
+    res.json({ expiringConsents: result.rows });
+  } catch {
+    console.error('Failed to fetch expiring consents.');
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Server error' } });
   }
 });
 

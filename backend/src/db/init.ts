@@ -165,6 +165,14 @@ async function applySchemaMigrationsAndSeed(client: Queryable) {
       console.log('Migration V12 applied successfully (idempotent).');
     }
 
+    // Apply V13 Migration (Account lockout columns on users table)
+    const migrationV13Path = path.join(__dirname, 'migration_v13.sql');
+    if (fs.existsSync(migrationV13Path)) {
+      const migration = fs.readFileSync(migrationV13Path, 'utf-8');
+      await client.query(migration);
+      console.log('Migration V13 applied successfully (idempotent).');
+    }
+
     const usersCheck = await client.query('SELECT count(*) FROM users');
     const userCount = parseInt(usersCheck.rows[0].count);
     if (shouldSeedDemoData(userCount)) {

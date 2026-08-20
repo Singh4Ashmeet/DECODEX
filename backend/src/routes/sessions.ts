@@ -9,6 +9,7 @@ import { audioQueue } from '../queue';
 import { processAudioJob } from '../queue/worker';
 import { getCache, deleteCache } from '../services/cache';
 import { getAudioStorage, generateStorageKey } from '../services/audioStorage';
+import { audioUploadLimiter } from '../middleware/rateLimiters';
 
 const router = Router();
 
@@ -102,7 +103,7 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
 });
 
 // POST /api/v1/sessions/:id/audio
-router.post('/:id/audio', authenticate, requireConsent, upload.single('audio'), async (req: AuthRequest, res) => {
+router.post('/:id/audio', authenticate, requireConsent, audioUploadLimiter, upload.single('audio'), async (req: AuthRequest, res) => {
   const sessionId: string = req.params.id as string;
   const file = req.file;
 
@@ -197,6 +198,14 @@ router.post('/:id/audio', authenticate, requireConsent, upload.single('audio'), 
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to queue audio' } });
+  } finally {
+    // SECURITY (H-2): Always delete the temp file from disk — never persist raw audio.
+    // The worker receives the filePath via jobData before this runs, so it can still
+    // read the file if it processes synchronously (in-process fallback path).
+    // For the queued path, the worker is responsible for its own cleanup after STT.
+    if (file?.path) {
+      try { fs.unlinkSync(file.path); } catch { /* ignore cleanup errors */ }
+    }
   }
 });
 

@@ -92,6 +92,29 @@ export const sendDataDeletionEmail = async (to: string, studentName: string): Pr
   });
 };
 
+export const sendConsentRenewalEmail = async (to: string, studentName: string): Promise<void> => {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const consentLink = frontendUrl + '/consent/renew';
+
+  await sendEmail({
+    to,
+    subject: 'Consent renewal needed for ' + studentName + "'s Decodex account",
+    text: [
+      'Hello,',
+      '',
+      'Your parental consent for ' + studentName + "'s Decodex account is expiring soon.",
+      'Consent must be renewed annually to continue using voice recording features.',
+      '',
+      'Please click the link below to renew consent:',
+      consentLink,
+      '',
+      'If you have questions, contact the school or Decodex support.',
+      '',
+      'If you no longer wish to use Decodex, you can ignore this email.',
+    ].join('\n'),
+  });
+};
+
 export const sendPasswordResetEmail = async (to: string, token: string): Promise<void> => {
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   const resetLink = frontendUrl + '/set-password/' + token;

@@ -1,6 +1,7 @@
 ﻿import React from 'react';
 import { Link } from 'react-router-dom';
 import DexAvatar from '../components/DexAvatar';
+import EducationalDisclaimer from '../components/EducationalDisclaimer';
 
 export default function TermsOfService() {
   return (
@@ -29,18 +30,7 @@ export default function TermsOfService() {
         </header>
 
         {/* Mandatory Legal Disclaimer Banner */}
-        <section className="stat-card stat-card-hover p-5 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-on-surface" style={{ borderLeftColor: 'var(--risk-medium-border)' }}>
-          <h2 className="font-display text-base font-bold text-amber-800 flex items-center gap-2 mb-1">
-            <span className="material-symbols-outlined text-amber-600">warning</span>
-            Mandatory Legal Disclaimer — Educational Screening Tool
-          </h2>
-          <p className="font-body text-xs sm:text-sm text-on-surface-variant leading-relaxed font-semibold student-text">
-            "This is an educational screening tool, not a medical diagnosis. Consult a qualified specialist for clinical assessment."
-          </p>
-          <p className="font-body text-xs text-on-surface-variant mt-2 leading-relaxed student-text">
-            Decodex utilizes artificial intelligence and automated speech alignment algorithms to analyze oral reading fluency and classify error patterns using Orton-Gillingham educational concepts. Decodex is <strong>NOT</strong> a medical device, clinical diagnostic instrument, or healthcare service.
-          </p>
-        </section>
+        <EducationalDisclaimer variant="card" className="mt-0" />
 
         {/* Section 1 */}
         <section className="space-y-3">

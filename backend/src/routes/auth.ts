@@ -4,7 +4,14 @@ import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { query } from '../db';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { authLimiter } from '../middleware/rateLimiters';
 import { sendPasswordResetEmail } from '../services/email';
+import { encryptUserPII } from '../services/piiEncryption';
+import { verifyTOTP, isMFARequired } from '../services/mfa';
+
+// Account lockout constants (C-2)
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET!;
@@ -49,10 +56,14 @@ router.post('/register', async (req, res) => {
     const password_hash = await bcrypt.hash(password, 12);
     const invite_code = randomBytes(3).toString('hex').toUpperCase();
     
+    // Encrypt PII fields
+    const encryptedEmail = encryptUserPII({ email }).email;
+    const encryptedDisplayName = encryptUserPII({ display_name }).display_name;
+    
     const result = await query(
       `INSERT INTO users (email, password_hash, role, display_name, grade_level, invite_code)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, email, role, display_name, preferred_language`,
-      [email, password_hash, role, display_name, grade_level ?? null, invite_code]
+      [encryptedEmail, password_hash, role, encryptedDisplayName, grade_level ?? null, invite_code]
     );
 
     const user = result.rows[0];
@@ -60,6 +71,7 @@ router.post('/register', async (req, res) => {
 
     res.cookie('token', token, getCookieOptions());
 
+    // SECURITY (C-1): Token is in the httpOnly cookie only — do NOT return it in the body.
     res.status(201).json({
       user: {
         id: user.id,
@@ -67,8 +79,7 @@ router.post('/register', async (req, res) => {
         role: user.role,
         display_name: user.display_name,
         preferredLanguage: user.preferred_language
-      },
-      token
+      }
     });
   } catch (error: any) {
     if (error.code === '23505') {
@@ -101,10 +112,14 @@ router.post('/register/parent', async (req, res) => {
   try {
     const password_hash = await bcrypt.hash(password, 12);
 
+    // Encrypt PII fields
+    const encryptedEmail = encryptUserPII({ email }).email;
+    const encryptedDisplayName = encryptUserPII({ display_name }).display_name;
+
     const result = await query(
       `INSERT INTO users (email, password_hash, role, display_name)
        VALUES ($1, $2, $3, $4) RETURNING id, email, role, display_name, preferred_language`,
-      [email, password_hash, role, display_name]
+      [encryptedEmail, password_hash, role, encryptedDisplayName]
     );
 
     const user = result.rows[0];
@@ -112,6 +127,7 @@ router.post('/register/parent', async (req, res) => {
 
     res.cookie('token', token, getCookieOptions());
 
+    // SECURITY (C-1): Token is in the httpOnly cookie only — do NOT return it in the body.
     res.status(201).json({
       user: {
         id: user.id,
@@ -119,8 +135,7 @@ router.post('/register/parent', async (req, res) => {
         role: user.role,
         display_name: user.display_name,
         preferredLanguage: user.preferred_language
-      },
-      token
+      }
     });
   } catch (error: unknown) {
     if (isPostgresUniqueViolation(error)) {
@@ -133,7 +148,7 @@ router.post('/register/parent', async (req, res) => {
 
 // POST /api/v1/auth/login
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, mfaToken } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Missing required fields' } });
@@ -146,16 +161,75 @@ router.post('/login', async (req, res) => {
     }
 
     const user = result.rows[0];
+
+    // SECURITY (C-2): Enforce per-account lockout before doing expensive bcrypt work.
+    if (user.locked_until && new Date(user.locked_until) > new Date()) {
+      const retryAfterSec = Math.ceil((new Date(user.locked_until).getTime() - Date.now()) / 1000);
+      res.set('Retry-After', String(retryAfterSec));
+      return res.status(429).json({
+        error: {
+          code: 'ACCOUNT_LOCKED',
+          message: 'Account temporarily locked due to too many failed login attempts. Try again later.',
+        },
+      });
+    }
+
     const match = await bcrypt.compare(password, user.password_hash);
 
     if (!match) {
+      // Increment failed attempts and lock if threshold reached
+      const newAttempts = (user.failed_login_attempts || 0) + 1;
+      if (newAttempts >= MAX_FAILED_ATTEMPTS) {
+        const lockUntil = new Date(Date.now() + LOCKOUT_DURATION_MS);
+        await query(
+          'UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3',
+          [newAttempts, lockUntil, user.id]
+        );
+      } else {
+        await query(
+          'UPDATE users SET failed_login_attempts = $1 WHERE id = $2',
+          [newAttempts, user.id]
+        );
+      }
       return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid credentials' } });
+    }
+
+    // Reset lockout state on successful credential check
+    if (user.failed_login_attempts > 0 || user.locked_until) {
+      await query(
+        'UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1',
+        [user.id]
+      );
+    }
+
+    // Check if MFA is required and enabled for this user
+    if (isMFARequired(user.role) && user.mfa_enabled) {
+      if (!mfaToken || typeof mfaToken !== 'string' || mfaToken.length !== 6) {
+        return res.status(401).json({ 
+          error: { 
+            code: 'MFA_REQUIRED', 
+            message: 'MFA token required',
+            details: { mfaRequired: true }
+          } 
+        });
+      }
+
+      if (!user.totp_secret || !verifyTOTP(mfaToken, user.totp_secret)) {
+        return res.status(401).json({ 
+          error: { 
+            code: 'INVALID_MFA_TOKEN', 
+            message: 'Invalid MFA token',
+            details: { mfaRequired: true }
+          } 
+        });
+      }
     }
 
     const token = jwt.sign({ id: user.id, role: user.role, preferredLanguage: user.preferred_language }, JWT_SECRET, { expiresIn: '7d' });
 
     res.cookie('token', token, getCookieOptions());
 
+    // SECURITY (C-1): Token is in the httpOnly cookie only — do NOT return it in the body.
     res.json({
       user: {
         id: user.id,
@@ -163,8 +237,7 @@ router.post('/login', async (req, res) => {
         role: user.role,
         display_name: user.display_name,
         preferredLanguage: user.preferred_language
-      },
-      token
+      }
     });
   } catch (error: any) {
     console.error('Auth login error:', error);
@@ -219,11 +292,19 @@ router.get('/me', authenticate, async (req: AuthRequest, res) => {
 // Update authenticated user's preferred_language.
 // Validates against supported languages. Reads fresh from DB on GET /me (no JWT re-issue needed).
 // Language is not an auth claim, so DB read-through is simpler and consistent with /me behavior.
+// Role field is explicitly rejected - roles cannot be changed via API (SEC-10).
 const SUPPORTED_LANGUAGES = ['en', 'hi'] as const;
 type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
 
 router.patch('/me', authenticate, async (req: AuthRequest, res) => {
-  const { preferredLanguage } = req.body;
+  const { preferredLanguage, role } = req.body;
+
+  // SEC-10: Reject any attempt to modify role via API
+  if (role !== undefined) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'Role cannot be modified via API' },
+    });
+  }
 
   if (preferredLanguage === undefined || preferredLanguage === null) {
     return res.status(400).json({
@@ -266,12 +347,13 @@ router.patch('/me', authenticate, async (req: AuthRequest, res) => {
   } catch (error: any) {
     console.error('Auth update me error:', error);
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: process.env.NODE_ENV === 'production' ? 'An internal error occurred' : (error.message || 'Server error') } });
-}
-  });
+  }
+});
 
 // POST /api/v1/auth/password-reset/request
 // Request a password reset/set link (for accounts that don't have a usable password yet)
-router.post('/password-reset/request', async (req, res) => {
+// SECURITY (M-3): Apply auth rate limiter to prevent email flood attacks.
+router.post('/password-reset/request', authLimiter, async (req, res) => {
   const { email } = req.body;
 
   if (typeof email !== 'string' || !email.trim()) {
@@ -284,9 +366,12 @@ router.post('/password-reset/request', async (req, res) => {
   }
 
   try {
+    // Encrypt email for lookup
+    const encryptedEmail = encryptUserPII({ email: email.trim().toLowerCase() }).email;
+    
     const result = await query(
       'SELECT id FROM users WHERE email = $1 AND role = \'parent\' AND deleted_at IS NULL',
-      [email.trim().toLowerCase()]
+      [encryptedEmail]
     );
 
     // Always return 200 to avoid email enumeration
@@ -337,13 +422,20 @@ router.post('/password-reset/confirm', async (req, res) => {
     const user = result.rows[0];
     const passwordHash = await bcrypt.hash(password, 12);
 
+    // SECURITY (M-4): Fetch actual role and preferred_language from DB instead of hardcoding.
+    const userRecord = await query(
+      'SELECT role, preferred_language FROM users WHERE id = $1 AND deleted_at IS NULL',
+      [user.id]
+    );
+    const { role: userRole, preferred_language: userLang } = userRecord.rows[0] || { role: 'parent', preferred_language: 'en' };
+
     await query(
-      'UPDATE users SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL, updated_at = NOW() WHERE id = $2',
+      'UPDATE users SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL, failed_login_attempts = 0, locked_until = NULL, updated_at = NOW() WHERE id = $2',
       [passwordHash, user.id]
     );
 
-    // Issue JWT and set cookie
-    const jwtToken = jwt.sign({ id: user.id, role: 'parent', preferredLanguage: 'en' }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+    // Issue JWT and set cookie using actual role from DB
+    const jwtToken = jwt.sign({ id: user.id, role: userRole, preferredLanguage: userLang || 'en' }, process.env.JWT_SECRET!, { expiresIn: '7d' });
     const isProd = process.env.NODE_ENV === 'production';
     res.cookie('token', jwtToken, {
       httpOnly: true,

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useApiQuery, getApiBaseUrl } from '../lib/api';
+import EducationalDisclaimer from '../components/EducationalDisclaimer';
 
 const CATEGORY_STYLES: Record<string, { label: string; style: string }> = {
   REV: { label: 'Reversal (b/d)', style: 'cat-rev' },
@@ -504,6 +505,7 @@ export default function ParentSessionReport() {
           )}
         </div>
       )}
+      <EducationalDisclaimer variant="card" className="mt-8" />
     </main>
   );
 }

@@ -24,6 +24,10 @@ CREATE TABLE IF NOT EXISTS users (
     date_of_birth DATE,                      -- nullable for non-student roles
     password_reset_token VARCHAR(255),       -- for password reset/set flow
     password_reset_expires TIMESTAMPTZ,      -- token expiry
+    -- MFA (TOTP) fields
+    totp_secret VARCHAR(255),                -- base32 encoded TOTP secret
+    mfa_enabled BOOLEAN DEFAULT FALSE,       -- whether MFA is enabled
+    mfa_recovery_codes TEXT[],               -- array of hashed recovery codes
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     deleted_at TIMESTAMPTZ                   -- soft-delete support
@@ -34,6 +38,10 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_code VARCHAR(10);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth DATE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(255);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMPTZ;
+-- MFA columns
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_recovery_codes TEXT[];
 
 -- Parent-Student Links
 CREATE TABLE IF NOT EXISTS parent_student_links (
@@ -174,6 +182,48 @@ CREATE TABLE IF NOT EXISTS drills (
     deleted_at TIMESTAMPTZ                   -- soft-delete support
 );
 
+-- SSO Providers (per school)
+CREATE TABLE IF NOT EXISTS sso_providers (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    provider_type VARCHAR(20) NOT NULL CHECK (provider_type IN ('saml', 'oidc')),
+    name VARCHAR(255) NOT NULL,              -- e.g., 'Google Workspace', 'Azure AD', 'Okta'
+    enabled BOOLEAN DEFAULT TRUE,
+    -- SAML config
+    saml_entry_point VARCHAR(500),           -- IdP SSO URL
+    saml_issuer VARCHAR(500),                -- SP Entity ID
+    saml_cert VARCHAR(5000),                 -- IdP public cert (PEM)
+    saml_private_key VARCHAR(5000),          -- SP private key (PEM) for signed requests
+    saml_callback_url VARCHAR(500),          -- ACS URL
+    -- OIDC config
+    oidc_issuer VARCHAR(500),                -- e.g., 'https://accounts.google.com'
+    oidc_client_id VARCHAR(500),
+    oidc_client_secret VARCHAR(500),         -- encrypted
+    oidc_callback_url VARCHAR(500),
+    oidc_scope VARCHAR(200) DEFAULT 'openid email profile',
+    -- Attribute mapping (JSON)
+    attribute_map JSONB DEFAULT '{"email": "email", "display_name": "name", "role": "role"}',
+    -- Role mapping (IdP group/role -> Decodex role)
+    role_map JSONB DEFAULT '{}',
+    -- Default role for new users
+    default_role VARCHAR(20) DEFAULT 'teacher',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (school_id, provider_type, name)
+);
+
+-- SSO User Links (maps external identity to local user)
+CREATE TABLE IF NOT EXISTS sso_user_links (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    provider_id UUID NOT NULL REFERENCES sso_providers(id) ON DELETE CASCADE,
+    external_id VARCHAR(500) NOT NULL,       -- NameID (SAML) or sub (OIDC)
+    external_email VARCHAR(255),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    last_login_at TIMESTAMPTZ,
+    UNIQUE (provider_id, external_id)
+);
+
 -- Indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_sessions_student ON reading_sessions(student_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_passage ON reading_sessions(passage_id);
@@ -193,3 +243,9 @@ CREATE INDEX IF NOT EXISTS idx_sessions_active ON reading_sessions(student_id, s
 -- V5: Audio storage indexes
 CREATE INDEX IF NOT EXISTS idx_sessions_storage_key ON reading_sessions(audio_storage_key) WHERE audio_storage_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_sessions_student_storage ON reading_sessions(student_id, started_at DESC) WHERE audio_storage_key IS NOT NULL;
+
+-- SSO indexes
+CREATE INDEX IF NOT EXISTS idx_sso_providers_school ON sso_providers(school_id);
+CREATE INDEX IF NOT EXISTS idx_sso_user_links_provider ON sso_user_links(provider_id);
+CREATE INDEX IF NOT EXISTS idx_sso_user_links_user ON sso_user_links(user_id);
+CREATE INDEX IF NOT EXISTS idx_sso_user_links_external ON sso_user_links(provider_id, external_id);

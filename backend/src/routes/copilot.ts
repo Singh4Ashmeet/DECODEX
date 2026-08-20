@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
+import { llmLimiter } from '../middleware/rateLimiters';
 import { generateStrategy, getStrategyHistory } from '../services/copilot';
 import { teacherHasStudentAccess } from '../services/studentAccess';
 
@@ -8,7 +9,7 @@ const router = Router();
 
 // POST /api/v1/copilot/:studentId/strategy
 // Generate a comprehensive intervention strategy. Teachers/admins only.
-router.post('/:studentId/strategy', authenticate, requireRole(['teacher', 'admin']), async (req: AuthRequest, res) => {
+router.post('/:studentId/strategy', authenticate, requireRole(['teacher', 'admin']), llmLimiter, async (req: AuthRequest, res) => {
   const studentId = String(req.params.studentId);
   const teacherId = req.user?.id;
 

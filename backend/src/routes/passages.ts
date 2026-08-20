@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db';
 import { authenticate } from '../middleware/auth';
+import { llmLimiter } from '../middleware/rateLimiters';
 import { generatePassage } from '../services/passageGenerator';
 
 const router = Router();
@@ -30,7 +31,7 @@ router.get('/', authenticate, async (req, res) => {
 
 // POST /api/v1/passages/generate
 // Dynamically generate a brand-new AI reading passage.
-router.post('/generate', authenticate, async (req, res) => {
+router.post('/generate', authenticate, llmLimiter, async (req, res) => {
   try {
     const gradeLevel = req.body?.grade_level ? parseInt(req.body.grade_level, 10) : 3;
     const passage = await generatePassage(gradeLevel);

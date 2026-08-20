@@ -5,6 +5,11 @@ import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import * as Sentry from '@sentry/node';
+import session from 'express-session';
+import passport from 'passport';
+import { auditLogger } from './middleware/audit';
+import { authLimiter, globalLimiter, audioUploadLimiter } from './middleware/rateLimiters';
+import { initializeSSOStrategies } from './services/sso';
 
 // Initialize Sentry before other imports that might throw
 if (process.env.SENTRY_DSN) {
@@ -21,6 +26,8 @@ import analyticsRoutes from './routes/analytics';
 import teacherRoutes from './routes/teacher';
 import consentRoutes from './routes/consent';
 import studentRoutes from './routes/students';
+import mfaRoutes from './routes/mfa';
+import ssoRoutes from './routes/sso';
 import { csrfProtection } from './middleware/csrf';
 
 // V2 route modules — AI Intervention Platform
@@ -56,6 +63,16 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   console.error('Generate one with: openssl rand -base64 32');
   process.exit(1);
 }
+if (!process.env.PII_ENCRYPTION_KEY) {
+  console.error('FATAL: PII_ENCRYPTION_KEY is missing.');
+  console.error('Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64\'))"');
+  process.exit(1);
+}
+if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
+  console.error('FATAL: SESSION_SECRET is missing or too short (minimum 32 characters).');
+  console.error('Generate one with: openssl rand -base64 32');
+  process.exit(1);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -64,9 +81,31 @@ const PORT = process.env.PORT || 3000;
 // Trust first proxy (Render / Vercel reverse proxy) so rate limiter
 // sees real client IPs instead of the proxy's IP.
 app.set('trust proxy', 1);
-app.use(helmet());
 
+// SECURITY (M-7/M-8): Apply spec-defined CSP and 1-year HSTS instead of Helmet defaults.
 const isProd = process.env.NODE_ENV === 'production';
+app.use(helmet({
+  hsts: {
+    maxAge: 31536000, // 1 year (spec requirement)
+    includeSubDomains: true,
+    preload: true,
+  },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'", 'https://api.openai.com'],
+      mediaSrc: ["'self'", 'blob:'],
+      workerSrc: ["'self'", 'blob:'],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
+}));
 
 // Build explicit allowlist — no wildcards.
 const allowedOrigins = [
@@ -103,30 +142,30 @@ app.use(
   })
 );
 
-// --- Rate limiting (Section 1e) ---
-// In test environment, disable globalLimiter to avoid 429 in tests, but keep authLimiter for rate-limiting tests
-const isTest = process.env.NODE_ENV?.trim() === 'test';
-
-export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 50,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: { code: 'RATE_LIMITED', message: 'Too many requests, please try again later' } },
-});
-
-export const globalLimiter = isTest
-  ? (req: Request, res: Response, next: NextFunction) => next()
-  : rateLimit({
-      windowMs: 15 * 60 * 1000,
-      max: 300,
-      standardHeaders: true,
-      legacyHeaders: false,
-      message: { error: { code: 'RATE_LIMITED', message: 'Too many requests, please try again later' } },
-    });
-
 app.use(express.json());
 app.use(cookieParser());
+
+// Session for passport (SSO)
+// SECURITY (H-4): SESSION_SECRET must be set independently from JWT_SECRET to
+// avoid key reuse — validated at startup above.
+app.use(session({
+  secret: process.env.SESSION_SECRET!,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: isProd,
+    httpOnly: true,
+    sameSite: isProd ? 'none' : 'lax',
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+  },
+}));
+
+// Passport for SSO
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Audit logging for all API routes (V1 requirement)
+app.use('/api/v1', auditLogger);
 
 // CSRF defense — checks Origin/Referer on state-changing requests.
 // No-op in test env (see middleware/csrf.ts).
@@ -142,6 +181,8 @@ app.use('/api/v1', globalLimiter);
 
 // Routes — V1 Core
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/mfa', mfaRoutes);
+app.use('/api/v1/sso', ssoRoutes);
 app.use('/api/v1/passages', passageRoutes);
 app.use('/api/v1/sessions', sessionRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
@@ -240,6 +281,11 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 async function startServer() {
   try {
     await initDBWithRetry({ label: 'Database startup initialization' });
+    
+    // Initialize SSO strategies after DB is ready
+    await initializeSSOStrategies();
+    console.log('[SSO] Strategies initialized');
+    
     app.listen(PORT, () => {
       console.log(`Server listening on port ${PORT}`);
     });

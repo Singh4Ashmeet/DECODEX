@@ -1,6 +1,6 @@
 import { query } from '../db';
-import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import { getLLMProvider } from './llmProviders';
 
 dotenv.config();
 
@@ -34,7 +34,7 @@ const PASSAGE_TEMPLATES = [
 ];
 
 /**
- * Generate a fresh, unique reading passage using Groq API or Procedural Engine.
+ * Generate a fresh, unique reading passage using the configured LLM provider.
  */
 export async function generatePassage(gradeLevel: number = 3): Promise<GeneratedPassage> {
   const countRes = await query(`SELECT COUNT(*) as cnt FROM passages`);
@@ -43,42 +43,14 @@ export async function generatePassage(gradeLevel: number = 3): Promise<Generated
   let title = '';
   let content = '';
 
-  const hasGroq = Boolean(process.env.GROQ_API_KEY);
+  const provider = getLLMProvider();
 
-  if (hasGroq) {
-    try {
-      const client = new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: 'https://api.groq.com/openai/v1' });
-      const model = 'llama-3.3-70b-versatile';
-
-      const completion = await client.chat.completions.create({
-        model,
-        messages: [
-          {
-            role: 'system',
-            content: `You are an educational reading assessment author. Write a fresh, engaging 60-90 word reading passage for Grade ${gradeLevel} students. Output format:\nTitle: [Title]\nContent: [Passage Text]`,
-          },
-          {
-            role: 'user',
-            content: `Generate unique reading passage #${count} for Grade ${gradeLevel}.`,
-          },
-        ],
-        max_tokens: 250,
-      });
-
-      const text = completion.choices[0]?.message?.content || '';
-      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-      const titleLine = lines.find(l => l.toLowerCase().startsWith('title:'));
-
-      if (titleLine) {
-        title = titleLine.replace(/^title:\s*/i, '').replace(/[*"]/g, '');
-        content = lines.filter(l => !l.toLowerCase().startsWith('title:') && !l.toLowerCase().startsWith('content:')).join(' ');
-      } else if (lines.length > 0) {
-        title = lines[0].replace(/[*"]/g, '');
-        content = lines.slice(1).join(' ');
-      }
-    } catch (err) {
-      console.warn('Groq passage generation fallback to procedural:', (err as Error).message);
-    }
+  try {
+    const passage = await provider.generatePassage({ gradeLevel });
+    title = passage.title;
+    content = passage.content;
+  } catch (err) {
+    console.warn('LLM passage generation fallback to procedural:', (err as Error).message);
   }
 
   if (!title || !content) {

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { requireConsent } from '../middleware/consent';
 import { synthesizeSpeech, synthesizePhrase, isValidPhraseId, PHRASE_BANK, type PhraseId, type SupportedLanguage } from '../services/tts';
 
 const router = Router();
@@ -17,7 +18,8 @@ const ttsLimiter = rateLimit({
 // POST /api/v1/tts
 // Synthesize speech from text. Returns audio/mpeg or { useBrowserTts: true }.
 // Used for dynamic/transcript content (e.g., student recording playback) — NOT cached.
-router.post('/', authenticate, ttsLimiter, async (req: AuthRequest, res) => {
+// Requires parental consent for minor students.
+router.post('/', authenticate, requireConsent, ttsLimiter, async (req: AuthRequest, res) => {
   const { text } = req.body;
 
   // Validate input
@@ -58,7 +60,8 @@ router.post('/', authenticate, ttsLimiter, async (req: AuthRequest, res) => {
 // Accepts { phraseId, language? } instead of raw text. Looks up phrase server-side, checks Redis cache by phraseId:language.
 // Returns cached audio if present — otherwise synthesizes once and caches with 30-day TTL.
 // Used for repeated encouragement/instruction phrases (never transcript content).
-router.post('/phrase', authenticate, ttsLimiter, async (req: AuthRequest, res) => {
+// Requires parental consent for minor students.
+router.post('/phrase', authenticate, requireConsent, ttsLimiter, async (req: AuthRequest, res) => {
   const { phraseId, language = 'en' } = req.body;
 
   // Validate input
