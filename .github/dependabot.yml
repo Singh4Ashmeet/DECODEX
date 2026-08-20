@@ -8,10 +8,6 @@ updates:
       day: "monday"
       time: "09:00"
     open-pull-requests-limit: 10
-    reviewers:
-      - "security-team"
-    assignees:
-      - "security-team"
     labels:
       - "dependencies"
       - "backend"
@@ -20,15 +16,30 @@ updates:
     groups:
       dev-dependencies:
         patterns:
-          - "*"
+          - "@types/*"
+          - "vitest"
+          - "ts-node*"
+          - "nodemon"
+          - "cross-env"
+          - "pino-pretty"
+          - "supertest"
         dependency-type: "development"
       prod-dependencies:
         patterns:
           - "*"
+        exclude-patterns:
+          - "@types/*"
+          - "vitest"
+          - "ts-node*"
+          - "nodemon"
+          - "cross-env"
+          - "pino-pretty"
+          - "supertest"
         dependency-type: "production"
     # Auto-merge for patch and minor updates that pass tests
     allow:
-      - dependency-type: "all"
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
     ignore:
       # Ignore major version updates for critical packages
       - dependency-name: "express"
@@ -46,10 +57,6 @@ updates:
       day: "monday"
       time: "09:00"
     open-pull-requests-limit: 10
-    reviewers:
-      - "frontend-team"
-    assignees:
-      - "frontend-team"
     labels:
       - "dependencies"
       - "frontend"
@@ -58,11 +65,35 @@ updates:
     groups:
       dev-dependencies:
         patterns:
-          - "*"
+          - "@types/*"
+          - "vitest"
+          - "@testing-library/*"
+          - "jsdom"
+          - "oxlint"
+          - "typescript"
+          - "vite"
+          - "@vitejs/plugin-react"
+          - "autoprefixer"
+          - "postcss"
+          - "tailwindcss"
+          - "sharp"
         dependency-type: "development"
       prod-dependencies:
         patterns:
           - "*"
+        exclude-patterns:
+          - "@types/*"
+          - "vitest"
+          - "@testing-library/*"
+          - "jsdom"
+          - "oxlint"
+          - "typescript"
+          - "vite"
+          - "@vitejs/plugin-react"
+          - "autoprefixer"
+          - "postcss"
+          - "tailwindcss"
+          - "sharp"
         dependency-type: "production"
     ignore:
       - dependency-name: "react"
