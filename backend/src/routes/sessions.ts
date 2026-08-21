@@ -122,7 +122,7 @@ router.post('/:id/audio', authenticate, requireConsent, audioUploadLimiter, uplo
       [sessionId, req.user?.id]
     );
 
-    if (sessionRes.rows.length === 0) {
+    if (!sessionRes?.rows || sessionRes.rows.length === 0) {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Session not found' } });
     }
 

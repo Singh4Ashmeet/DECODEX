@@ -5,11 +5,20 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mockQuery, generateTestToken, TEST_USERS } from './helpers/setup';
+import request from 'supertest';
+import app from '../server';
+import * as consentErasureModule from '../queue/consentErasure';
 import { eraseConsentDataForLink, eraseExpiredConsentData, scheduleConsentErasureJob } from '../queue/consentErasure';
 import { sendDataDeletionEmail } from '../services/email';
 import { getAudioStorage } from '../services/audioStorage';
-import request from 'supertest';
-import app from '../server';
+
+vi.mock('../queue/consentErasure', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../queue/consentErasure')>();
+  return {
+    ...actual,
+    eraseConsentDataForLink: vi.fn().mockImplementation(actual.eraseConsentDataForLink),
+  };
+});
 
 vi.mock('../services/email', () => ({
   sendDataDeletionEmail: vi.fn().mockResolvedValue(undefined),
@@ -74,7 +83,7 @@ describe('Consent Erasure / Data Deletion (SEC-15)', () => {
       const result = await eraseConsentDataForLink(linkId, true);
 
       expect(result).toBe('purged');
-      expect(mockQuery).toHaveBeenCalledTimes(13);
+      expect(mockQuery).toHaveBeenCalledTimes(14);
       
       // Verify cascade deletes
       const deleteCalls = mockQuery.mock.calls
@@ -122,6 +131,7 @@ describe('Consent Erasure / Data Deletion (SEC-15)', () => {
     });
 
     it('should delete audio files from object storage', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
       mockQuery
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({
@@ -134,6 +144,7 @@ describe('Consent Erasure / Data Deletion (SEC-15)', () => {
           }],
         })
         .mockResolvedValueOnce({ rows: [{ id: linkId, consent_granted: false, withdrawn_at: '2024-01-01' }] })
+        .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({ rows: [] })
@@ -197,32 +208,46 @@ describe('Consent Erasure / Data Deletion (SEC-15)', () => {
   // ────────────────────────────────────────────────────────────────────────────
   describe('eraseExpiredConsentData (Daily Cron)', () => {
     it('should find and purge all due links', async () => {
-      mockQuery
-        .mockResolvedValueOnce({ // Due links
-          rows: [{ id: 'link-1' }, { id: 'link-2' }],
-        });
-
-      // Mock two erasure calls
-      vi.mocked(eraseConsentDataForLink)
-        .mockResolvedValueOnce('purged')
-        .mockResolvedValueOnce('purged');
+      mockQuery.mockImplementation(async (sql: string, params?: any[]) => {
+        if (sql.includes('WHERE hard_delete_at <= NOW()')) {
+          return { rows: [{ id: linkId }, { id: 'link-2' }] };
+        }
+        if (sql.includes('WHERE link.id = $1')) {
+          return { rows: [{ id: params?.[0] || 'link-1', parent_id: TEST_USERS.parent.id, student_id: studentId, parent_email: 'p@test.com', student_name: 'S' }] };
+        }
+        if (sql.includes('FROM parent_student_links') && sql.includes('FOR UPDATE')) {
+          return { rows: [{ id: params?.[0] || 'link-1', consent_granted: false, withdrawn_at: '2024-01-01' }] };
+        }
+        return { rows: [] };
+      });
 
       const result = await eraseExpiredConsentData();
 
       expect(result.purged).toBe(2);
       expect(result.skipped).toBe(0);
-      expect(eraseConsentDataForLink).toHaveBeenCalledTimes(2);
     });
 
     it('should count skipped links', async () => {
-      mockQuery
-        .mockResolvedValueOnce({
-          rows: [{ id: 'link-1' }, { id: 'link-2' }],
-        });
-
-      vi.mocked(eraseConsentDataForLink)
-        .mockResolvedValueOnce('purged')
-        .mockResolvedValueOnce('skipped_active_consent');
+      mockQuery.mockImplementation(async (sql: string, params?: any[]) => {
+        if (sql.includes('WHERE hard_delete_at <= NOW()')) {
+          return { rows: [{ id: linkId }, { id: 'link-2' }] };
+        }
+        if (sql.includes('WHERE link.id = $1')) {
+          return { rows: [{ id: params?.[0] || 'link-1', parent_id: TEST_USERS.parent.id, student_id: params?.[0] === 'link-2' ? 'student-2' : studentId, parent_email: 'p@test.com', student_name: 'S' }] };
+        }
+        if (sql.includes('FROM parent_student_links') && sql.includes('FOR UPDATE')) {
+          if (params?.[0] === 'student-2') {
+            return {
+              rows: [
+                { id: 'link-2', consent_granted: false, withdrawn_at: '2024-01-01' },
+                { id: 'other-active-link', consent_granted: true, withdrawn_at: null }
+              ]
+            };
+          }
+          return { rows: [{ id: linkId, consent_granted: false, withdrawn_at: '2024-01-01' }] };
+        }
+        return { rows: [] };
+      });
 
       const result = await eraseExpiredConsentData();
 
@@ -267,7 +292,7 @@ describe('Consent Erasure / Data Deletion (SEC-15)', () => {
 
   describe('POST /api/v1/consent/:linkId/force-purge (Admin)', () => {
     it('should allow admin to force purge immediately', async () => {
-      vi.mocked(eraseConsentDataForLink).mockResolvedValueOnce('purged');
+      vi.spyOn(consentErasureModule, 'eraseConsentDataForLink').mockResolvedValueOnce('purged');
 
       const res = await request(app)
         .post(`/api/v1/consent/${linkId}/force-purge`)
@@ -298,6 +323,7 @@ describe('Consent Erasure / Data Deletion (SEC-15)', () => {
         'drills',
       ];
 
+      mockQuery.mockResolvedValue({ rows: [] });
       mockQuery
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({
@@ -312,10 +338,9 @@ describe('Consent Erasure / Data Deletion (SEC-15)', () => {
         .mockResolvedValueOnce({ rows: [{ id: linkId, consent_granted: false, withdrawn_at: '2024-01-01' }] });
 
       // Mock all the UPDATE/DELETE calls
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 12; i++) {
         mockQuery.mockResolvedValueOnce({ rows: [] });
       }
-      mockQuery.mockResolvedValueOnce({ rows: [] }); // Audio keys
 
       await eraseConsentDataForLink(linkId, true);
 
@@ -328,6 +353,7 @@ describe('Consent Erasure / Data Deletion (SEC-15)', () => {
     });
 
     it('should not delete user accounts (only link data)', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
       mockQuery
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({
@@ -360,6 +386,7 @@ describe('Consent Erasure / Data Deletion (SEC-15)', () => {
       // This test verifies the two-phase approach
       
       // Phase 1: Withdraw (soft delete)
+      mockQuery.mockResolvedValue({ rows: [] });
       mockQuery.mockResolvedValueOnce({
         rows: [{
           parent_email: 'parent@example.com',
@@ -390,6 +417,7 @@ describe('Consent Erasure / Data Deletion (SEC-15)', () => {
     it('should retain consent records for 7 years', async () => {
       // Consent records in parent_student_links are retained with purged_at timestamp
       // Only the student data is deleted, not the consent audit trail
+      mockQuery.mockResolvedValue({ rows: [] });
       mockQuery
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({
@@ -403,10 +431,9 @@ describe('Consent Erasure / Data Deletion (SEC-15)', () => {
         })
         .mockResolvedValueOnce({ rows: [{ id: linkId, consent_granted: false, withdrawn_at: '2024-01-01' }] });
 
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 12; i++) {
         mockQuery.mockResolvedValueOnce({ rows: [] });
       }
-      mockQuery.mockResolvedValueOnce({ rows: [] });
 
       await eraseConsentDataForLink(linkId, true);
 

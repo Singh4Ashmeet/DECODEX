@@ -58,18 +58,21 @@ describe('Audio Persistence Security (SEC-11)', () => {
         'audio_storage_provider',
       ];
 
-      mockQuery.mockResolvedValueOnce({
-        rows: [{
-          id: sessionId,
-          student_id: TEST_USERS.studentA.id,
-          passage_id: 'passage-1',
-          status: 'completed',
-          audio_storage_key: 'student-id/session-id.webm',
-          audio_mime_type: 'audio/webm',
-          audio_size_bytes: 1024,
-          audio_storage_provider: 'local',
-        }],
-      });
+      mockQuery
+        .mockResolvedValueOnce({
+          rows: [{
+            id: sessionId,
+            student_id: TEST_USERS.studentA.id,
+            passage_id: 'passage-1',
+            status: 'completed',
+            audio_storage_key: 'student-id/session-id.webm',
+            audio_mime_type: 'audio/webm',
+            audio_size_bytes: 1024,
+            audio_storage_provider: 'local',
+          }],
+        })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] });
 
       const res = await request(app)
         .get(`/api/v1/sessions/${sessionId}/results`)
@@ -90,6 +93,7 @@ describe('Audio Persistence Security (SEC-11)', () => {
   describe('POST /api/v1/sessions/:id/audio — No DB Audio Storage', () => {
     it('should not insert raw audio into database', async () => {
       mockQuery
+        .mockResolvedValueOnce({ rows: [{ consent_date: new Date().toISOString() }] }) // requireConsent
         .mockResolvedValueOnce({ rows: [{ student_id: TEST_USERS.studentA.id, content: 'Test passage' }] })
         .mockResolvedValueOnce({ rows: [] }); // UPDATE with storage key only
 
@@ -117,6 +121,7 @@ describe('Audio Persistence Security (SEC-11)', () => {
 
     it('should queue job with file path (temp file) not audio data', async () => {
       mockQuery
+        .mockResolvedValueOnce({ rows: [{ consent_date: new Date().toISOString() }] }) // requireConsent
         .mockResolvedValueOnce({ rows: [{ student_id: TEST_USERS.studentA.id, content: 'Test passage' }] })
         .mockResolvedValueOnce({ rows: [] });
 

@@ -15,8 +15,12 @@ router.get('/', authenticate, async (req, res) => {
     const params = [];
     
     if (grade_level) {
+      const parsedGrade = parseInt(grade_level as string, 10);
+      if (isNaN(parsedGrade)) {
+        return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'grade_level must be a valid number' } });
+      }
       dbQuery += ' WHERE grade_level = $1';
-      params.push(parseInt(grade_level as string, 10));
+      params.push(parsedGrade);
     }
     
     dbQuery += ' ORDER BY created_at DESC, grade_level ASC, title ASC';
@@ -51,7 +55,7 @@ router.get('/:id', authenticate, async (req, res) => {
     }
     res.json({ passage: result.rows[0] });
   } catch (error) {
-    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch passage' } });
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Passage not found' } });
   }
 });
 

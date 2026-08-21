@@ -544,7 +544,7 @@ describe('Consent Security — Bypass Prevention', () => {
       expect(loginRes.status).toBe(200);
       expect(loginRes.body.user).toBeDefined();
       expect(loginRes.body.user.role).toBe('parent');
-      expect(loginRes.body.token).toBeDefined();
+      expect(loginRes.headers['set-cookie']).toBeDefined();
     });
   });
 });

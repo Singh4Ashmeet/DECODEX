@@ -34,7 +34,6 @@ describe('Auth Routes', () => {
       expect(res.status).toBe(201);
       expect(res.body.user.email).toBe('new@decodex.com');
       expect(res.body.user.role).toBe('student');
-      expect(res.body.token).toBeDefined();
       // httpOnly cookie should be set
       const setCookie = res.headers['set-cookie'];
       expect(setCookie).toBeDefined();
@@ -112,7 +111,7 @@ describe('Auth Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.user.email).toBe('student@decodex.com');
-      expect(res.body.token).toBeDefined();
+      expect(res.headers['set-cookie']).toBeDefined();
     });
 
     it('should reject wrong password', async () => {

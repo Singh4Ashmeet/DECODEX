@@ -7,7 +7,7 @@
  * - JIT (Just-In-Time) provisioning for new users
  * - Attribute & role mapping from IdP claims
  */
-import { Strategy as SAMLStrategy } from 'passport-saml';
+import { Strategy as SAMLStrategy } from '@node-saml/passport-saml';
 import { Strategy as OIDCStrategy } from 'passport-openidconnect';
 import { query } from '../db';
 import { encryptUserPII } from './piiEncryption';
@@ -64,7 +64,7 @@ export function createSAMLStrategy(provider: SSOProviderConfig, verifyFn: (profi
     forceAuthn: false,
     providerName: provider.name,
   };
-  return new SAMLStrategy(samlConfig, verifyFn as any);
+  return new SAMLStrategy(samlConfig, verifyFn as any, verifyFn as any);
 }
 
 /**

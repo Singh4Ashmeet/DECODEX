@@ -19,16 +19,21 @@ vi.mock('../services/openai', () => ({
 }));
 
 // Mock the OpenAI client used by classifier
-const mockGroqCreate = vi.fn();
-vi.mock('openai', () => ({
-  default: vi.fn().mockImplementation(() => ({
-    chat: {
-      completions: {
-        create: mockGroqCreate,
-      },
-    },
-  })),
+const { mockGroqCreate } = vi.hoisted(() => ({
+  mockGroqCreate: vi.fn(),
 }));
+
+vi.mock('openai', () => {
+  return {
+    default: class MockOpenAI {
+      chat = {
+        completions: {
+          create: mockGroqCreate,
+        },
+      };
+    },
+  };
+});
 
 describe('LLM Prompt PII Audit (SEC-13)', () => {
   let classifierModule: any;
@@ -36,11 +41,27 @@ describe('LLM Prompt PII Audit (SEC-13)', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mockGroqCreate.mockReset();
+    mockGroqCreate.mockResolvedValue({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            classifications: [
+              { index: 0, category: 'SUB', rationale: 'Transposition' },
+              { index: 5, category: 'OMI', rationale: 'Omitted word' },
+              { index: 10, category: 'INS', rationale: 'Inserted word' },
+              { index: 15, category: 'REV', rationale: 'Reversal' },
+            ],
+          }),
+        },
+      }],
+    });
     
     // Reset modules to re-import with fresh mocks
     vi.resetModules();
     
-    // Import classifier after mocks are set up
+    // Import llmProviders & classifier after mocks are set up
+    const { GroqProvider, setLLMProvider } = await import('../services/llmProviders');
+    setLLMProvider(new GroqProvider({ type: 'groq' }));
     classifierModule = await import('../services/classifier');
   });
 
@@ -186,10 +207,19 @@ describe('LLM Prompt PII Audit (SEC-13)', () => {
     it('should not include student name in copilot prompts', async () => {
       // Mock the database query for copilot
       const mockQuery = vi.fn()
-        .mockResolvedValueOnce({ rows: [{ display_name: 'Test Student', grade_level: 3 }] }); // student lookup
+        .mockResolvedValueOnce({ rows: [{ display_name: 'Test Student', grade_level: 3 }] }) // student lookup
+        .mockResolvedValue({ rows: [] }); // all subsequent queries
 
       vi.doMock('../db', () => ({
         query: mockQuery,
+      }));
+
+      // Mock health score and risk screening to avoid additional query calls
+      vi.doMock('../services/healthScore', () => ({
+        getLatestHealthScore: vi.fn().mockResolvedValue(null),
+      }));
+      vi.doMock('../services/riskScreening', () => ({
+        getLatestScreening: vi.fn().mockResolvedValue(null),
       }));
 
       const { generateStrategy } = await import('../services/copilot');
@@ -197,9 +227,9 @@ describe('LLM Prompt PII Audit (SEC-13)', () => {
       await generateStrategy('student-123', 'Test error profile');
 
       // The copilot service should only send error profile data, not student PII
-      // We verify by checking that the student name was looked up but not sent to LLM
+      // We verify by checking that the student name was looked up via the actual query
       expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT id, display_name, grade_level'),
+        expect.stringContaining('SELECT display_name, grade_level'),
         ['student-123']
       );
     });
@@ -225,32 +255,44 @@ describe('LLM Prompt PII Audit (SEC-13)', () => {
   // ────────────────────────────────────────────────────────────────────────────
   describe('Passage Generator — Prompt Contains No PII', () => {
     it('should not include student data in passage generation prompts', async () => {
-      const mockGroqCreatePassage = vi.fn().mockResolvedValue({
-        choices: [{
-          message: { content: 'Title: Test\nContent: Test passage content' },
-        }],
-      });
+      // The passage generator uses getLLMProvider() which creates an OpenAI client.
+      // We verify that the generated passage contains no student PII by checking
+      // that the service only accepts a grade level parameter.
+      const mockDbQuery = vi.fn()
+        .mockResolvedValueOnce({ rows: [{ cnt: '0' }] }) // COUNT query
+        .mockResolvedValueOnce({ rows: [{ id: 'generated-id' }] }); // INSERT query
 
-      vi.doMock('openai', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          chat: { completions: { create: mockGroqCreatePassage } },
-        })),
+      vi.doMock('../db', () => ({
+        query: mockDbQuery,
       }));
 
-      vi.resetModules();
+      // Mock the LLM provider to capture what's sent
+      const mockGeneratePassage = vi.fn().mockResolvedValue({
+        title: 'Test Passage',
+        content: 'Test content for reading practice',
+      });
+      vi.doMock('../services/llmProviders', async (importOriginal) => {
+        const actual = await importOriginal<typeof import('../services/llmProviders')>();
+        return {
+          ...actual,
+          getLLMProvider: () => ({
+            generatePassage: mockGeneratePassage,
+          }),
+        };
+      });
+
       const { generatePassage } = await import('../services/passageGenerator');
       
       await generatePassage(3);
 
-      expect(mockGroqCreatePassage).toHaveBeenCalled();
-      const callArgs = mockGroqCreatePassage.mock.calls[0][0];
-      const promptContent = JSON.stringify(callArgs.messages);
-      
-      // Should only contain grade level, no student info
-      expect(promptContent).toContain('Grade 3');
-      expect(promptContent).not.toContain('student');
-      expect(promptContent).not.toContain('name');
-      expect(promptContent).not.toContain('email');
+      // Verify the LLM was called with only gradeLevel, no student PII
+      expect(mockGeneratePassage).toHaveBeenCalled();
+      const callArgs = mockGeneratePassage.mock.calls[0][0];
+      expect(callArgs).toEqual({ gradeLevel: 3 });
+      // No student info should be in the request
+      expect(JSON.stringify(callArgs)).not.toContain('student');
+      expect(JSON.stringify(callArgs)).not.toContain('name');
+      expect(JSON.stringify(callArgs)).not.toContain('email');
     });
   });
 

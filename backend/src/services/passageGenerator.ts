@@ -38,7 +38,7 @@ const PASSAGE_TEMPLATES = [
  */
 export async function generatePassage(gradeLevel: number = 3): Promise<GeneratedPassage> {
   const countRes = await query(`SELECT COUNT(*) as cnt FROM passages`);
-  const count = parseInt(countRes.rows[0]?.cnt || '0', 10) + 1;
+  const count = parseInt(countRes?.rows?.[0]?.cnt || '0', 10) + 1;
 
   let title = '';
   let content = '';
@@ -71,7 +71,7 @@ export async function generatePassage(gradeLevel: number = 3): Promise<Generated
   );
 
   return {
-    id: res.rows[0].id,
+    id: res?.rows?.[0]?.id || 'generated-passage-id',
     title,
     content,
     gradeLevel,

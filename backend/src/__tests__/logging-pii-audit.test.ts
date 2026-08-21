@@ -39,8 +39,8 @@ const PII_PATTERNS = [
   /"(?:name|studentName|fullName|userName|first_name|last_name)":\s*"[^"]+"/i,
   // Dates of birth (e.g. dob, date_of_birth fields or YYYY-MM-DD in PII fields)
   /"(?:dob|date_of_birth|birthdate)":\s*"[^"]+"/i,
-  // Phone numbers
-  /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/,
+  // Phone numbers (10 digits standalone or hyphens/dots)
+  /(?<!\d)\d{3}[-.]?\d{3}[-.]?\d{4}(?!\d)/,
   // SSN-like
   /\b\d{3}-\d{2}-\d{4}\b/,
   // Credit card
@@ -86,7 +86,7 @@ describe('Logging PII Audit (SEC-12)', () => {
       // Import logger after mock is set up
       const { logger } = await import('../lib/logger');
       
-      logger.info({ userId: '11111111-1111-1111-1111-111111111111', action: 'login' }, 'User logged in');
+      logger.info({ userId: 'a1b2c3d4-e5f6-4789-a1b2-c3d4e5f6a7b8', action: 'login' }, 'User logged in');
       
       const logs = getAllLogs();
       const result = containsPII(logs);
@@ -96,7 +96,7 @@ describe('Logging PII Audit (SEC-12)', () => {
     it('should not log student names', async () => {
       const { logger } = await import('../lib/logger');
       
-      logger.info({ studentId: '11111111-1111-1111-1111-111111111111', action: 'session_started' }, 'Session started');
+      logger.info({ studentId: 'a1b2c3d4-e5f6-4789-a1b2-c3d4e5f6a7b8', action: 'session_started' }, 'Session started');
       
       const logs = getAllLogs();
       const result = containsPII(logs);
@@ -106,7 +106,7 @@ describe('Logging PII Audit (SEC-12)', () => {
     it('should not log date of birth', async () => {
       const { logger } = await import('../lib/logger');
       
-      logger.info({ studentId: '11111111-1111-1111-1111-111111111111', action: 'consent_verified' }, 'Consent verified');
+      logger.info({ studentId: 'a1b2c3d4-e5f6-4789-a1b2-c3d4e5f6a7b8', action: 'consent_verified' }, 'Consent verified');
       
       const logs = getAllLogs();
       const result = containsPII(logs);
@@ -116,10 +116,10 @@ describe('Logging PII Audit (SEC-12)', () => {
     it('should allow UUIDs in logs (for debugging)', async () => {
       const { logger } = await import('../lib/logger');
       
-      logger.info({ studentId: '11111111-1111-1111-1111-111111111111', action: 'audio_upload' }, 'Upload received');
+      logger.info({ studentId: 'a1b2c3d4-e5f6-4789-a1b2-c3d4e5f6a7b8', action: 'audio_upload' }, 'Upload received');
       
       const logs = getAllLogs();
-      expect(logs).toContain('11111111-1111-1111-1111-111111111111');
+      expect(logs).toContain('a1b2c3d4-e5f6-4789-a1b2-c3d4e5f6a7b8');
     });
 
     it('should allow generic identifiers', async () => {
@@ -142,7 +142,7 @@ describe('Logging PII Audit (SEC-12)', () => {
       const error = new Error('Database connection failed');
       logger.error({ 
         err: { message: error.message, stack: error.stack }, 
-        studentId: '11111111-1111-1111-1111-111111111111' 
+        studentId: 'a1b2c3d4-e5f6-4789-a1b2-c3d4e5f6a7b8' 
       }, 'Operation failed');
       
       const logs = getAllLogs();
