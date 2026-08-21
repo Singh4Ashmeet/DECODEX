@@ -99,7 +99,7 @@ describe('ErrorBoundary', () => {
   });
 
   it('handles errors without a message gracefully', () => {
-    function BadBomb() {
+    function BadBomb(): null {
       throw new Error();
     }
     render(

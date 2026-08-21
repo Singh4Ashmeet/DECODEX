@@ -110,10 +110,11 @@ function extractResourceId(path: string): string | undefined {
   return uuidMatch?.[1];
 }
 
-export function auditLogger(req: AuthRequest, res: Response, next: NextFunction): void {
+export function auditLogger(req: Request, res: Response, next: NextFunction): void {
   const startTime = Date.now();
-  const userId = req.user?.id || 'anonymous';
-  const role = req.user?.role || 'unknown';
+  const authReq = req as AuthRequest;
+  const userId = authReq.user?.id || 'anonymous';
+  const role = authReq.user?.role || 'unknown';
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
   const userAgent = req.get('user-agent');
   const method = req.method;

@@ -55,10 +55,7 @@ export interface CopilotRequest {
   errorProfile: string;
 }
 
-export interface CopilotResponse {
-  summary: string;
-  recommendations: string[];
-}
+export type CopilotResponse = any;
 
 export interface TTSRequest {
   text: string;
@@ -67,7 +64,7 @@ export interface TTSRequest {
 }
 
 export interface TTSResponse {
-  audioBuffer: Buffer;
+  audioBuffer: Buffer | null;
   useBrowserTts: boolean;
 }
 
@@ -113,7 +110,7 @@ export class GroqProvider implements LLMProvider {
   
   async synthesizeSpeech(request: TTSRequest): Promise<TTSResponse> {
     const { synthesizeSpeech } = await import('./tts');
-    return synthesizeSpeech(request.text, request.language);
+    return synthesizeSpeech(request.text);
   }
   
   async healthCheck(): Promise<boolean> {

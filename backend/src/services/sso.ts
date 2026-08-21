@@ -50,45 +50,39 @@ export interface SSOUserProfile {
  * Create SAML strategy for a provider
  */
 export function createSAMLStrategy(provider: SSOProviderConfig, verifyFn: (profile: any, done: Function) => void): SAMLStrategy {
-  const strategy = new SAMLStrategy(
-    {
-      entryPoint: provider.samlEntryPoint,
-      issuer: provider.samlIssuer,
-      callbackUrl: provider.samlCallbackUrl,
-      cert: provider.samlCert,
-      privateKey: provider.samlPrivateKey,
-      decryptionPvk: provider.samlPrivateKey,
-      identifierFormat: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
-      acceptedClockSkewMs: 5000,
-      wantAssertionsSigned: true,
-      wantMessageSigned: true,
-      forceAuthn: false,
-      providerName: provider.name,
-    },
-    verifyFn
-  );
-  return strategy;
+  const samlConfig: any = {
+    entryPoint: provider.samlEntryPoint,
+    issuer: provider.samlIssuer,
+    callbackUrl: provider.samlCallbackUrl,
+    cert: provider.samlCert || '',
+    privateKey: provider.samlPrivateKey,
+    decryptionPvk: provider.samlPrivateKey,
+    identifierFormat: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+    acceptedClockSkewMs: 5000,
+    wantAssertionsSigned: true,
+    wantMessageSigned: true,
+    forceAuthn: false,
+    providerName: provider.name,
+  };
+  return new SAMLStrategy(samlConfig, verifyFn as any);
 }
 
 /**
  * Create OIDC strategy for a provider
  */
 export function createOIDCStrategy(provider: SSOProviderConfig, verifyFn: (iss: string, sub: string, profile: any, jwtClaims: any, done: Function) => void): OIDCStrategy {
-  const strategy = new OIDCStrategy(
-    {
-      issuer: provider.oidcIssuer,
-      authorizationURL: `${provider.oidcIssuer}/authorize`,
-      tokenURL: `${provider.oidcIssuer}/token`,
-      userInfoURL: `${provider.oidcIssuer}/userinfo`,
-      clientID: provider.oidcClientId,
-      clientSecret: provider.oidcClientSecret,
-      callbackURL: provider.oidcCallbackUrl,
-      scope: provider.oidcScope || 'openid email profile',
-      passReqToCallback: true,
-    },
-    verifyFn
-  );
-  return strategy;
+  const oidcConfig: any = {
+    issuer: provider.oidcIssuer,
+    authorizationURL: `${provider.oidcIssuer}/authorize`,
+    tokenURL: `${provider.oidcIssuer}/token`,
+    userInfoURL: `${provider.oidcIssuer}/userinfo`,
+    clientID: provider.oidcClientId || '',
+    clientSecret: provider.oidcClientSecret || '',
+    callbackURL: provider.oidcCallbackUrl || '',
+    scope: provider.oidcScope || 'openid email profile',
+    passReqToCallback: true,
+  };
+  return new OIDCStrategy(oidcConfig, verifyFn as any);
 }
 
 /**
