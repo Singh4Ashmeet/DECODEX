@@ -6,9 +6,9 @@
  */
 import { 
   generateSecret, 
-  keyuri, 
-  check,
-  generate 
+  generateURI, 
+  verifySync, 
+  generateSync 
 } from 'otplib';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
@@ -36,7 +36,7 @@ const RECOVERY_CODE_LENGTH = 8;
  */
 export function generateMFASecret(userEmail: string, issuer = 'Decodex'): { secret: string; otpauthUrl: string } {
   const secret = generateSecret();
-  const otpauthUrl = keyuri(userEmail, issuer, secret);
+  const otpauthUrl = generateURI({ secret, label: userEmail, issuer });
   return { secret, otpauthUrl };
 }
 
@@ -75,7 +75,8 @@ export function generateRecoveryCodes(): { plaintext: string[]; hashed: string[]
  */
 export function verifyTOTP(token: string, secret: string): boolean {
   try {
-    return check(token, secret);
+    const result = verifySync({ token, secret });
+    return result.valid === true;
   } catch {
     return false;
   }
@@ -103,7 +104,7 @@ export async function verifyRecoveryCode(code: string, hashedCodes: string[]): P
  * Generate current TOTP token (for testing/admin)
  */
 export function generateCurrentTOTP(secret: string): string {
-  return generate(secret);
+  return generateSync({ secret });
 }
 
 /**

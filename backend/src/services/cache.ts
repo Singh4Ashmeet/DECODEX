@@ -6,7 +6,11 @@ dotenv.config();
 
 let redisWarned = false;
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+const isTls = redisUrl.startsWith('rediss://');
+
+const redis = new Redis(redisUrl, {
+  ...(isTls ? { tls: { rejectUnauthorized: false } } : {}),
   retryStrategy(times: number): number | null {
     if (times === 1 && !redisWarned) {
       redisWarned = true;

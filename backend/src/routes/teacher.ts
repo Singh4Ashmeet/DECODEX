@@ -91,7 +91,8 @@ router.get('/students', authenticate, requireTeacher, async (req: AuthRequest, r
 });
 
 // GET /api/v1/teacher/students/:id/trends
-router.get('/students/:id/trends', authenticate, requireTeacher, async (req: AuthRequest, res) => {
+router.get('/students/:id/trends', authenticate, requireTeacher, async (req: any, res: any) => {
+  const authReq = req as AuthRequest;
   try {
     const result = await query(
       `SELECT 

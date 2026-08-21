@@ -70,7 +70,7 @@ async function initSAMLStrategy(providerId: string): Promise<void> {
       const ssoProfile = {
         externalId: profile.nameID || profile['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'],
         email: mapped.email || profile.email,
-        displayName: mapped.display_name || profile.displayName || profile.cn,
+        displayName: mapped.displayName || profile.displayName || profile.cn,
         role,
         rawProfile: profile,
       };
@@ -84,7 +84,7 @@ async function initSAMLStrategy(providerId: string): Promise<void> {
   
   const strategy = createSAMLStrategy(provider, verifyFn);
   samlStrategies.set(providerId, strategy);
-  passport.use(`saml-${providerId}`, strategy);
+  passport.use(`saml-${providerId}`, strategy as any);
 }
 
 /**
@@ -102,7 +102,7 @@ async function initOIDCStrategy(providerId: string): Promise<void> {
       const ssoProfile = {
         externalId: sub,
         email: mapped.email || profile.email,
-        displayName: mapped.display_name || profile.name || profile.given_name + ' ' + profile.family_name,
+        displayName: mapped.displayName || profile.name || profile.given_name + ' ' + profile.family_name,
         role,
         rawProfile: profile,
       };
@@ -114,9 +114,9 @@ async function initOIDCStrategy(providerId: string): Promise<void> {
     }
   };
   
-  const strategy = createOIDCStrategy(provider, verifyFn);
+  const strategy = createOIDCStrategy(provider, verifyFn as any);
   oidcStrategies.set(providerId, strategy);
-  passport.use(`oidc-${providerId}`, strategy);
+  passport.use(`oidc-${providerId}`, strategy as any);
 }
 
 /**
@@ -258,17 +258,19 @@ router.patch('/providers/:id', authenticate, requireAdmin, async (req: AuthReque
   }
 });
 
-router.delete('/providers/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.delete('/providers/:id', authenticate, requireAdmin, async (req: any, res: any) => {
+  const authReq = req as AuthRequest;
   try {
+    const providerId = req.params.id as string;
     const result = await query(
       'DELETE FROM sso_providers WHERE id = $1 AND school_id = $2 RETURNING id',
-      [req.params.id, req.user!.school_id]
+      [providerId, authReq.user!.school_id]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Provider not found' } });
     }
-    samlStrategies.delete(req.params.id);
-    oidcStrategies.delete(req.params.id);
+    samlStrategies.delete(providerId);
+    oidcStrategies.delete(providerId);
     res.json({ deleted: true });
   } catch (error) {
     console.error('SSO provider delete error:', error);
@@ -279,8 +281,9 @@ router.delete('/providers/:id', authenticate, requireAdmin, async (req: AuthRequ
 // ────────────────────────────────────────────────────────────────────────────
 // SAML Endpoints
 // ────────────────────────────────────────────────────────────────────────────
-router.get('/saml/:providerId/login', async (req: Request, res: Response, next: Function) => {
-  const provider = await getProviderConfig(req.params.providerId);
+router.get('/saml/:providerId/login', async (req: any, res: any, next: Function) => {
+  const providerId = req.params.providerId as string;
+  const provider = await getProviderConfig(providerId);
   if (!provider || provider.providerType !== 'saml') {
     return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'SAML provider not found' } });
   }
@@ -293,8 +296,9 @@ router.get('/saml/:providerId/login', async (req: Request, res: Response, next: 
   passport.authenticate(`saml-${provider.id}`, { failureRedirect: '/login?error=saml_failed' })(req, res, next);
 });
 
-router.post('/saml/:providerId/acs', async (req: Request, res: Response, next: Function) => {
-  const provider = await getProviderConfig(req.params.providerId);
+router.post('/saml/:providerId/acs', async (req: any, res: any, next: Function) => {
+  const providerId = req.params.providerId as string;
+  const provider = await getProviderConfig(providerId);
   if (!provider || provider.providerType !== 'saml') {
     return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'SAML provider not found' } });
   }
@@ -310,8 +314,9 @@ router.post('/saml/:providerId/acs', async (req: Request, res: Response, next: F
   })(req, res, next);
 });
 
-router.get('/saml/:providerId/metadata', async (req: Request, res: Response) => {
-  const provider = await getProviderConfig(req.params.providerId);
+router.get('/saml/:providerId/metadata', async (req: any, res: any) => {
+  const providerId = req.params.providerId as string;
+  const provider = await getProviderConfig(providerId);
   if (!provider || provider.providerType !== 'saml') {
     return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'SAML provider not found' } });
   }
@@ -321,7 +326,7 @@ router.get('/saml/:providerId/metadata', async (req: Request, res: Response) => 
   res.send(metadata);
 });
 
-router.get('/saml/:providerId/logout', async (req: Request, res: Response) => {
+router.get('/saml/:providerId/logout', async (req: any, res: any) => {
   // SAML SLO not implemented - just clear local session
   res.redirect('/login?logged_out=true');
 });
@@ -329,8 +334,9 @@ router.get('/saml/:providerId/logout', async (req: Request, res: Response) => {
 // ────────────────────────────────────────────────────────────────────────────
 // OIDC Endpoints
 // ────────────────────────────────────────────────────────────────────────────
-router.get('/oidc/:providerId/login', async (req: Request, res: Response, next: Function) => {
-  const provider = await getProviderConfig(req.params.providerId);
+router.get('/oidc/:providerId/login', async (req: any, res: any, next: Function) => {
+  const providerId = req.params.providerId as string;
+  const provider = await getProviderConfig(providerId);
   if (!provider || provider.providerType !== 'oidc') {
     return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'OIDC provider not found' } });
   }
@@ -346,8 +352,9 @@ router.get('/oidc/:providerId/login', async (req: Request, res: Response, next: 
   })(req, res, next);
 });
 
-router.get('/oidc/:providerId/callback', async (req: Request, res: Response, next: Function) => {
-  const provider = await getProviderConfig(req.params.providerId);
+router.get('/oidc/:providerId/callback', async (req: any, res: any, next: Function) => {
+  const providerId = req.params.providerId as string;
+  const provider = await getProviderConfig(providerId);
   if (!provider || provider.providerType !== 'oidc') {
     return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'OIDC provider not found' } });
   }
@@ -363,9 +370,10 @@ router.get('/oidc/:providerId/callback', async (req: Request, res: Response, nex
   })(req, res, next);
 });
 
-router.get('/oidc/:providerId/logout', async (req: Request, res: Response) => {
+router.get('/oidc/:providerId/logout', async (req: any, res: any) => {
   // OIDC RP-Initiated Logout
-  const provider = await getProviderConfig(req.params.providerId);
+  const providerId = req.params.providerId as string;
+  const provider = await getProviderConfig(providerId);
   if (!provider || provider.providerType !== 'oidc') {
     return res.redirect('/login?logged_out=true');
   }
@@ -377,10 +385,13 @@ router.get('/oidc/:providerId/logout', async (req: Request, res: Response) => {
 // ────────────────────────────────────────────────────────────────────────────
 // Session handling after SSO login
 // ────────────────────────────────────────────────────────────────────────────
-router.get('/session', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/session', authenticate, async (req: any, res: any) => {
+  const authReq = req as AuthRequest;
+  const user = authReq.user!;
+  const preferredLang = user.preferredLanguage || user.preferred_language;
   // Return JWT for frontend after SSO login
   const token = jwt.sign(
-    { id: req.user!.id, role: req.user!.role, preferredLanguage: req.user!.preferred_language },
+    { id: user.id, role: user.role, preferredLanguage: preferredLang },
     process.env.JWT_SECRET!,
     { expiresIn: '7d' }
   );
@@ -396,11 +407,11 @@ router.get('/session', authenticate, async (req: AuthRequest, res: Response) => 
   
   res.json({ 
     user: {
-      id: req.user!.id,
-      email: req.user!.email,
-      role: req.user!.role,
-      display_name: req.user!.display_name,
-      preferredLanguage: req.user!.preferred_language
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      display_name: user.display_name,
+      preferredLanguage: preferredLang
     },
     token
   });

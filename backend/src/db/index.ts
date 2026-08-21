@@ -68,7 +68,7 @@ export const query = async (text: string, params?: any[]): Promise<{ rows: any[]
       result.rows = transformUserRows(result.rows);
     }
     
-    return { rows: result.rows, rowCount: result.rowCount };
+    return { rows: result.rows, rowCount: result.rowCount ?? 0 };
   } finally {
     client.release();
   }

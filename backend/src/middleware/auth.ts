@@ -6,12 +6,22 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
+declare global {
+  namespace Express {
+    interface User {
+      id: string;
+      role: string;
+      email?: string;
+      display_name?: string;
+      preferred_language?: string;
+      school_id?: string;
+      preferredLanguage?: string;
+    }
+  }
+}
+
 export interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    role: string;
-    preferredLanguage?: string;
-  };
+  user?: Express.User;
 }
 
 export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {

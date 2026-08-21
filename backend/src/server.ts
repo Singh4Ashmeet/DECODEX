@@ -9,7 +9,7 @@ import session from 'express-session';
 import passport from 'passport';
 import { auditLogger } from './middleware/audit';
 import { authLimiter, globalLimiter, audioUploadLimiter } from './middleware/rateLimiters';
-import { initializeSSOStrategies } from './services/sso';
+import { initializeSSOStrategies } from './routes/sso';
 
 // Initialize Sentry before other imports that might throw
 if (process.env.SENTRY_DSN) {

@@ -19,7 +19,8 @@ const ttsLimiter = rateLimit({
 // Synthesize speech from text. Returns audio/mpeg or { useBrowserTts: true }.
 // Used for dynamic/transcript content (e.g., student recording playback) — NOT cached.
 // Requires parental consent for minor students.
-router.post('/', authenticate, requireConsent, ttsLimiter, async (req: AuthRequest, res) => {
+router.post('/', authenticate, requireConsent, ttsLimiter, async (req: any, res: any) => {
+  const authReq = req as AuthRequest;
   const { text } = req.body;
 
   // Validate input
@@ -61,7 +62,7 @@ router.post('/', authenticate, requireConsent, ttsLimiter, async (req: AuthReque
 // Returns cached audio if present — otherwise synthesizes once and caches with 30-day TTL.
 // Used for repeated encouragement/instruction phrases (never transcript content).
 // Requires parental consent for minor students.
-router.post('/phrase', authenticate, requireConsent, ttsLimiter, async (req: AuthRequest, res) => {
+router.post('/phrase', authenticate, requireConsent, ttsLimiter, async (req: any, res: any) => {
   const { phraseId, language = 'en' } = req.body;
 
   // Validate input

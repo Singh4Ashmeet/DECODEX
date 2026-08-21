@@ -182,12 +182,6 @@ export const synthesizeSpeech = async (text: string): Promise<TtsResult> => {
   return await ttsBreaker.fire(text);
 };
 
-/**
- * Generate cache key for a phrase bank entry, scoped by language.
- */
-function getPhraseCacheKey(phraseId: PhraseId, language: SupportedLanguage = 'en'): string {
-  return `tts:phrase:${phraseId}:${language}`;
-}
 
 /**
  * Synthesize speech for a stock phrase from the phrase bank.
