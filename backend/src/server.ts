@@ -6,6 +6,8 @@ import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import * as Sentry from '@sentry/node';
 import session from 'express-session';
+import { RedisStore } from 'connect-redis';
+import Redis from 'ioredis';
 import passport from 'passport';
 import { auditLogger } from './middleware/audit';
 import { authLimiter, globalLimiter, audioUploadLimiter } from './middleware/rateLimiters';
@@ -148,7 +150,24 @@ app.use(cookieParser());
 // Session for passport (SSO)
 // SECURITY (H-4): SESSION_SECRET must be set independently from JWT_SECRET to
 // avoid key reuse — validated at startup above.
+// Redis-backed session store — falls back to MemoryStore warning if REDIS_URL is missing
+const sessionRedisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+const sessionRedisClient = new Redis(sessionRedisUrl, {
+  tls: sessionRedisUrl.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
+  retryStrategy(times: number): number | null {
+    if (times === 1) {
+      console.warn('⚠️  Redis unavailable for sessions — falling back to MemoryStore (not recommended in production)');
+    }
+    return Math.min(times * 2000, 30000);
+  },
+  maxRetriesPerRequest: null,
+  enableReadyCheck: false,
+  lazyConnect: true,
+});
+sessionRedisClient.connect().catch(() => {});
+
 app.use(session({
+  store: new RedisStore({ client: sessionRedisClient }),
   secret: process.env.SESSION_SECRET!,
   resave: false,
   saveUninitialized: false,
