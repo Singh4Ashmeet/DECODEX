@@ -95,20 +95,20 @@ export async function getProfile(studentId: string): Promise<GamificationProfile
     `SELECT * FROM gamification_profiles WHERE student_id = $1`,
     [studentId]
   );
-  const row = res.rows[0];
-  const { level, xpToNext, progress } = computeLevel(row.xp);
+  const row = res?.rows?.[0] || { xp: 0, current_streak: 0, longest_streak: 0, last_activity_date: null, total_sessions: 0, total_drills_completed: 0, total_stories_read: 0, freeze_count: 0, freeze_month: null };
+  const { level, xpToNext, progress } = computeLevel(row.xp || 0);
   return {
-    xp: row.xp,
+    xp: row.xp || 0,
     level,
-    currentStreak: row.current_streak,
-    longestStreak: row.longest_streak,
+    currentStreak: row.current_streak || 0,
+    longestStreak: row.longest_streak || 0,
     lastActivityDate: row.last_activity_date,
-    totalSessions: row.total_sessions,
-    totalDrillsCompleted: row.total_drills_completed,
-    totalStoriesRead: row.total_stories_read,
+    totalSessions: row.total_sessions || 0,
+    totalDrillsCompleted: row.total_drills_completed || 0,
+    totalStoriesRead: row.total_stories_read || 0,
     xpToNextLevel: xpToNext,
     levelProgress: progress,
-    freezeCount: row.freeze_count,
+    freezeCount: row.freeze_count || 0,
     freezeMonth: row.freeze_month,
   };
 }
@@ -119,7 +119,7 @@ export async function getProfile(studentId: string): Promise<GamificationProfile
 export async function awardXP(studentId: string, amount: number, reason: string): Promise<{ newXP: number; newLevel: number; leveledUp: boolean }> {
   await ensureProfile(studentId);
   const prev = await query(`SELECT xp FROM gamification_profiles WHERE student_id = $1`, [studentId]);
-  const prevXP = prev.rows[0]?.xp || 0;
+  const prevXP = prev?.rows?.[0]?.xp || 0;
   const prevLevel = computeLevel(prevXP).level;
 
   await query(

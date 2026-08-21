@@ -120,7 +120,7 @@ function getOpenAIClient() {
  * Inner function wrapped by the circuit breaker.
  * Calls OpenAI TTS API and returns the audio as a Buffer.
  */
-const _synthesizeSpeech = async (text: string): Promise<TtsResult> => {
+export const _synthesizeSpeech = async (text: string): Promise<TtsResult> => {
   const client = getOpenAIClient();
 
   if (!client) {
@@ -167,15 +167,17 @@ ttsBreaker.fallback(() => {
  * This is used for dynamic/transcript content (e.g., student recording playback) and MUST NOT be cached.
  */
 export const synthesizeSpeech = async (text: string): Promise<TtsResult> => {
-  // Try provider TTS first (self-hosted if configured)
-  const provider = getLLMProvider();
-  try {
-    const result = await provider.synthesizeSpeech({ text, language: 'en' });
-    if (!result.useBrowserTts && result.audioBuffer) {
-      return result;
+  // Try self-hosted provider TTS first if explicitly configured (not default groq)
+  if (process.env.LLM_PROVIDER && process.env.LLM_PROVIDER !== 'groq') {
+    try {
+      const provider = getLLMProvider();
+      const result = await provider.synthesizeSpeech({ text, language: 'en' });
+      if (!result.useBrowserTts && result.audioBuffer) {
+        return result;
+      }
+    } catch (err) {
+      console.warn('Provider TTS failed, falling back to OpenAI:', (err as Error).message);
     }
-  } catch (err) {
-    console.warn('Provider TTS failed, falling back to OpenAI:', (err as Error).message);
   }
 
   // Fallback to OpenAI TTS with circuit breaker
@@ -202,12 +204,16 @@ export const synthesizePhrase = async (phraseId: PhraseId, language: SupportedLa
   console.log(`[TTS Phrase Cache] MISS: ${phraseId}:${language}`);
   const text = getPhraseText(phraseId, language);
   
-  // Try provider TTS first
+  // Try self-hosted provider TTS first if explicitly configured (not default groq)
   let result: TtsResult;
-  const provider = getLLMProvider();
-  try {
-    result = await provider.synthesizeSpeech({ text, language });
-  } catch {
+  if (process.env.LLM_PROVIDER && process.env.LLM_PROVIDER !== 'groq') {
+    try {
+      const provider = getLLMProvider();
+      result = await provider.synthesizeSpeech({ text, language });
+    } catch {
+      result = await ttsBreaker.fire(text);
+    }
+  } else {
     result = await ttsBreaker.fire(text);
   }
 

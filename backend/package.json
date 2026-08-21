@@ -20,7 +20,8 @@
   "private": true,
   "type": "commonjs",
   "dependencies": {
-    "@sentry/node": "^8.55.0",
+    "@node-saml/passport-saml": "^5.1.0",
+    "@sentry/node": "^10.70.0",
     "@supabase/supabase-js": "^2.45.0",
     "@types/bcrypt": "^6.0.0",
     "@types/cookie-parser": "^1.4.10",

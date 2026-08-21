@@ -71,13 +71,17 @@ vi.mock('../../services/email', () => ({
   sendConsentEmail: vi.fn(),
   sendConsentWithdrawalEmail: vi.fn(),
   sendPasswordResetEmail: vi.fn(),
+  sendDataDeletionEmail: vi.fn(),
 }));
 
-vi.mock('../../queue/consentErasure', () => ({
-  eraseConsentDataForLink: vi.fn(),
-  scheduleConsentErasureJob: vi.fn().mockResolvedValue(undefined),
-  eraseExpiredConsentData: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock('../../queue/consentErasure', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../queue/consentErasure')>();
+  return {
+    ...actual,
+    scheduleConsentErasureJob: vi.fn().mockResolvedValue(undefined),
+    eraseExpiredConsentData: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 // Create mock functions that can be configured per test
 const mockSynthesizeSpeech = vi.fn().mockResolvedValue({ audioBuffer: Buffer.from('fake-audio'), useBrowserTts: false });

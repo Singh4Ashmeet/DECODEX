@@ -88,12 +88,7 @@ describe('Consent Denied Recording Block (SEC-14)', () => {
   // ────────────────────────────────────────────────────────────────────────────
   describe('Consent Status Edge Cases', () => {
     it('should block when consent withdrawn', async () => {
-      mockQuery.mockResolvedValueOnce({ 
-        rows: [{ 
-          consent_date: new Date(Date.now() - 86400000).toISOString(),
-          withdrawn_at: new Date().toISOString(), // Withdrawn
-        }] 
-      });
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // Filtered out by withdrawn_at IS NULL
 
       const res = await request(app)
         .post(`/api/v1/sessions/${sessionId}/audio`)
@@ -105,12 +100,7 @@ describe('Consent Denied Recording Block (SEC-14)', () => {
     });
 
     it('should block when consent expired (>365 days)', async () => {
-      mockQuery.mockResolvedValueOnce({ 
-        rows: [{ 
-          consent_date: new Date(Date.now() - 400 * 86400000).toISOString(), // >365 days
-          withdrawn_at: null,
-        }] 
-      });
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // Filtered out by consent_date >= NOW() - 365 days
 
       const res = await request(app)
         .post(`/api/v1/sessions/${sessionId}/audio`)

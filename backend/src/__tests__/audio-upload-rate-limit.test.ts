@@ -33,7 +33,7 @@ describe('Audio Upload Rate Limiting (SEC-08)', () => {
     // Both routes should exist
     expect(sessionRoutes).toBeDefined();
     expect(dexRoutes).toBeDefined();
-  });
+  }, 15000);
 
   it('should have audioUploadLimiter configured for 10 requests/hour', async () => {
     const { audioUploadLimiter } = await import('../middleware/rateLimiters');

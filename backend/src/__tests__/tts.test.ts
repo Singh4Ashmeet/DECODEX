@@ -162,6 +162,7 @@ describe('POST /api/v1/tts/phrase', () => {
     expect(res1.headers['content-type']).toContain('audio/mpeg');
 
     // Second request (same language - English)
+    mockConsentGranted();
     const res2 = await request(app)
       .post('/api/v1/tts/phrase')
       .set('Cookie', `token=${token}`)

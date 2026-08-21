@@ -91,7 +91,7 @@ export async function generateStrategy(
     `SELECT display_name, grade_level FROM users WHERE id = $1`,
     [studentId]
   );
-  const student = studentRes.rows[0];
+  const student = studentRes?.rows?.[0];
   const studentName = student?.display_name || 'Student';
   const gradeLevel = student?.grade_level || 3;
 
@@ -112,7 +112,7 @@ export async function generateStrategy(
      FROM error_profiles WHERE student_id = $1`,
     [studentId]
   );
-  const errors = errorRes.rows[0] || {};
+  const errors = errorRes?.rows?.[0] || {};
 
   // 4. Get session performance trends
   const trendsRes = await query(
@@ -162,7 +162,7 @@ export async function generateStrategy(
   }
 
   // 9. Generate summary
-  const avgWpm = trendsRes.rows.length > 0
+  const avgWpm = trendsRes?.rows?.length
     ? Math.round(trendsRes.rows.reduce((a: number, r: any) => a + (r.words_per_minute || 0), 0) / trendsRes.rows.length)
     : 0;
 
@@ -180,7 +180,7 @@ export async function generateStrategy(
      ORDER BY psl.consent_date ASC LIMIT 1`,
     [studentId]
   );
-  const parentPreferredLanguage: ParentLanguage = parentLangRes.rows[0]?.preferred_language || 'en';
+  const parentPreferredLanguage: ParentLanguage = parentLangRes?.rows?.[0]?.preferred_language || 'en';
 
   // 11. Generate parent communication draft in parent's preferred language
   const parentDraft = generateParentCommunication(
