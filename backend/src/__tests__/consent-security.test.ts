@@ -11,7 +11,7 @@
  * Tests labelled [BYPASS] must FAIL against the old code (pre-fix) and PASS
  * after the fix.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import bcrypt from 'bcrypt';
 import { mockQuery, generateTestToken, TEST_USERS } from './helpers/setup';
@@ -103,7 +103,7 @@ describe('Consent Security — Bypass Prevention', () => {
       // The actual DB UPDATE to set consent_granted = TRUE must never have been
       // called via mockQuery. Verify no call contained 'consent_granted = TRUE'
       // (other than the read-only token INSERT, which doesn't touch the links table)
-      const allQueryCalls = mockQuery.mock.calls.map(([sql]: [string]) => sql || '');
+      const allQueryCalls = mockQuery.mock.calls.map((args: any[]) => (args[0] as string) || '');
       const consentGrantedUpdates = allQueryCalls.filter(
         (sql) =>
           sql.includes('consent_granted = TRUE') &&
@@ -131,7 +131,7 @@ describe('Consent Security — Bypass Prevention', () => {
       mockQuery.mockResolvedValueOnce({
         rows: [{
           parent_id: TEST_USERS.parent.id,
-          email: TEST_USERS.parent.email,
+          email: 'parent@test.com',
           student_id: TEST_USERS.studentA.id,
           failed_attempts: 0,
           last_attempt_at: null,
@@ -175,7 +175,7 @@ describe('Consent Security — Bypass Prevention', () => {
       mockQuery.mockResolvedValueOnce({
         rows: [{
           parent_id: TEST_USERS.parent.id,
-          email: TEST_USERS.parent.email,
+          email: 'parent@test.com',
           student_id: TEST_USERS.studentA.id,
           failed_attempts: 0,
           last_attempt_at: null,
@@ -242,8 +242,8 @@ describe('Consent Security — Bypass Prevention', () => {
       expect(res.body.consent_email_sent).toBe(true);
 
       // Verify INSERT used parent_id=NULL and email
-      const insertCall = mockQuery.mock.calls.find(([sql]: [string]) =>
-        sql && sql.includes('INSERT INTO consent_tokens')
+      const insertCall = mockQuery.mock.calls.find((args: any[]) =>
+        args[0] && (args[0] as string).includes('INSERT INTO consent_tokens')
       );
       expect(insertCall).toBeDefined();
       expect(insertCall![0]).toContain('parent_id');
@@ -336,8 +336,8 @@ describe('Consent Security — Bypass Prevention', () => {
       expect(res.body.consent_granted).toBe(true);
 
       // Verify parent account was created - check for INSERT INTO users with 'parent' role value
-      const insertUserCall = mockQuery.mock.calls.find(([sql]: [string]) =>
-        sql && sql.includes('INSERT INTO users') && sql.includes("'parent'")
+      const insertUserCall = mockQuery.mock.calls.find((args: any[]) =>
+        args[0] && (args[0] as string).includes('INSERT INTO users') && (args[0] as string).includes("'parent'")
       );
       expect(insertUserCall).toBeDefined();
     });
@@ -391,8 +391,8 @@ describe('Consent Security — Bypass Prevention', () => {
       expect(res.body.consent_granted).toBe(true);
 
       // Verify no new user was created (existing parent used)
-      const insertUserCall = mockQuery.mock.calls.find(([sql]: [string]) =>
-        sql && sql.includes('INSERT INTO users') && sql.includes("role = 'parent'")
+      const insertUserCall = mockQuery.mock.calls.find((args: any[]) =>
+        args[0] && (args[0] as string).includes('INSERT INTO users') && (args[0] as string).includes("role = 'parent'")
       );
       expect(insertUserCall).toBeUndefined();
     });
@@ -434,8 +434,8 @@ describe('Consent Security — Bypass Prevention', () => {
       expect(res.body.error.details.attempts_remaining).toBe(4);
 
       // Verify no parent account was created (DOB failed before that step)
-      const insertUserCall = mockQuery.mock.calls.find(([sql]: [string]) =>
-        sql && sql.includes('INSERT INTO users') && sql.includes("role = 'parent'")
+      const insertUserCall = mockQuery.mock.calls.find((args: any[]) =>
+        args[0] && (args[0] as string).includes('INSERT INTO users') && (args[0] as string).includes("role = 'parent'")
       );
       expect(insertUserCall).toBeUndefined();
     });
