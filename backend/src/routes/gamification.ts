@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { getProfile, getAchievements } from '../services/gamification';
+import { canAccessStudent } from '../services/studentAccess';
 
 const router = Router();
 
@@ -8,10 +9,9 @@ const router = Router();
 // Get a student's gamification profile (XP, level, streak).
 router.get('/:studentId/profile', authenticate, async (req: AuthRequest, res) => {
   const studentId = String(req.params.studentId);
-  const requesterRole = req.user?.role;
-  const requesterId = req.user?.id;
 
-  if (requesterRole === 'student' && requesterId !== studentId) {
+  const hasAccess = await canAccessStudent(studentId, { id: req.user?.id, role: req.user?.role });
+  if (!hasAccess) {
     return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Access denied' } });
   }
 
@@ -28,10 +28,9 @@ router.get('/:studentId/profile', authenticate, async (req: AuthRequest, res) =>
 // Get all achievements with earned status for a student.
 router.get('/:studentId/achievements', authenticate, async (req: AuthRequest, res) => {
   const studentId = String(req.params.studentId);
-  const requesterRole = req.user?.role;
-  const requesterId = req.user?.id;
 
-  if (requesterRole === 'student' && requesterId !== studentId) {
+  const hasAccess = await canAccessStudent(studentId, { id: req.user?.id, role: req.user?.role });
+  if (!hasAccess) {
     return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Access denied' } });
   }
 

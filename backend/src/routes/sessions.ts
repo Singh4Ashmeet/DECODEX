@@ -10,6 +10,7 @@ import { processAudioJob } from '../queue/worker';
 import { getCache, deleteCache } from '../services/cache';
 import { getAudioStorage, generateStorageKey } from '../services/audioStorage';
 import { audioUploadLimiter } from '../middleware/rateLimiters';
+import { canAccessStudent } from '../services/studentAccess';
 
 const router = Router();
 
@@ -271,7 +272,7 @@ router.get('/:id/status', authenticate, async (req: AuthRequest, res) => {
 
   try {
     const result = await query(
-      `SELECT status, words_per_minute FROM reading_sessions WHERE id = $1`,
+      `SELECT student_id, status, words_per_minute FROM reading_sessions WHERE id = $1 AND deleted_at IS NULL`,
       [id]
     );
 
@@ -280,6 +281,12 @@ router.get('/:id/status', authenticate, async (req: AuthRequest, res) => {
     }
 
     const session = result.rows[0];
+
+    const hasAccess = await canAccessStudent(session.student_id, { id: req.user?.id, role: req.user?.role });
+    if (!hasAccess) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Access denied' } });
+    }
+
     const statusMap: Record<string, { step: string; message: string }> = {
       in_progress: { step: 'processing', message: 'Processing your recording...' },
       completed: { step: 'complete', message: 'Processing complete!' },
@@ -412,7 +419,7 @@ router.get('/:id/results', authenticate, async (req: AuthRequest, res) => {
        FROM reading_sessions rs
        JOIN passages p ON rs.passage_id = p.id
        LEFT JOIN error_profiles ep ON ep.session_id = rs.id
-       WHERE rs.id = $1`,
+       WHERE rs.id = $1 AND rs.deleted_at IS NULL`,
       [id]
     );
 

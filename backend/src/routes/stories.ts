@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { llmLimiter } from '../middleware/rateLimiters';
 import { generateStory, getStudentStories, getStoryById } from '../services/storyGenerator';
+import { canAccessStudent } from '../services/studentAccess';
 
 const router = Router();
 
@@ -10,8 +11,8 @@ const router = Router();
 router.post('/generate', authenticate, llmLimiter, async (req: AuthRequest, res) => {
   const studentId = req.body.student_id || req.user?.id;
 
-  // Students can only generate for themselves
-  if (req.user?.role === 'student' && studentId !== req.user?.id) {
+  const hasAccess = await canAccessStudent(studentId, { id: req.user?.id, role: req.user?.role });
+  if (!hasAccess) {
     return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Access denied' } });
   }
 
@@ -28,10 +29,9 @@ router.post('/generate', authenticate, llmLimiter, async (req: AuthRequest, res)
 // Get all generated stories for a student.
 router.get('/student/:studentId', authenticate, async (req: AuthRequest, res) => {
   const studentId = String(req.params.studentId);
-  const requesterRole = req.user?.role;
-  const requesterId = req.user?.id;
 
-  if (requesterRole === 'student' && requesterId !== studentId) {
+  const hasAccess = await canAccessStudent(studentId, { id: req.user?.id, role: req.user?.role });
+  if (!hasAccess) {
     return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Access denied' } });
   }
 
@@ -54,8 +54,8 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Story not found' } });
     }
 
-    // IDOR check for students
-    if (req.user?.role === 'student' && story.studentId !== req.user?.id) {
+    const hasAccess = await canAccessStudent(story.studentId, { id: req.user?.id, role: req.user?.role });
+    if (!hasAccess) {
       return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Access denied' } });
     }
 
