@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { llmLimiter } from '../middleware/rateLimiters';
 import { generateLearningPath, getActiveLearningPath, completeDayTask } from '../services/learningPath';
+import { canAccessStudent } from '../services/studentAccess';
 
 const router = Router();
 
@@ -9,10 +10,9 @@ const router = Router();
 // Get the active learning path for a student.
 router.get('/:studentId', authenticate, async (req: AuthRequest, res) => {
   const studentId = String(req.params.studentId);
-  const requesterRole = req.user?.role;
-  const requesterId = req.user?.id;
 
-  if (requesterRole === 'student' && requesterId !== studentId) {
+  const hasAccess = await canAccessStudent(studentId, { id: req.user?.id, role: req.user?.role });
+  if (!hasAccess) {
     return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Access denied' } });
   }
 
@@ -29,11 +29,9 @@ router.get('/:studentId', authenticate, async (req: AuthRequest, res) => {
 // Generate a new learning path for a student.
 router.post('/:studentId/generate', authenticate, llmLimiter, async (req: AuthRequest, res) => {
   const studentId = String(req.params.studentId);
-  const requesterRole = req.user?.role;
-  const requesterId = req.user?.id;
 
-  // Students can generate for themselves, teachers/admins for any student
-  if (requesterRole === 'student' && requesterId !== studentId) {
+  const hasAccess = await canAccessStudent(studentId, { id: req.user?.id, role: req.user?.role });
+  if (!hasAccess) {
     return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Access denied' } });
   }
 
