@@ -45,20 +45,51 @@ const deliverEmail = async (message: EmailMessage): Promise<void> => {
     console.warn('[EmailCapture] Failed to log email to disk:', logErr);
   }
 
+  // Validate SMTP credentials before attempting delivery
+  const smtpUser = process.env.GMAIL_USER || '';
+  const smtpPass = process.env.GMAIL_APP_PASSWORD || '';
+  if (!smtpUser || !smtpPass) {
+    console.error('[Email] SMTP credentials not configured — GMAIL_USER and/or GMAIL_APP_PASSWORD are missing. ' +
+      'Email will NOT be delivered. Set these in your Render environment.');
+    throw new Error('SMTP credentials not configured (GMAIL_USER / GMAIL_APP_PASSWORD)');
+  }
+
   await transporter.sendMail({
-    from: process.env.GMAIL_USER || 'no-reply@decodex.local',
+    from: smtpUser,
     ...message,
   });
 };
 
 const emailBreaker = new CircuitBreaker(deliverEmail, {
-  timeout: 10000,
+  timeout: 15000,
   errorThresholdPercentage: 50,
-  resetTimeout: 30000,
+  resetTimeout: 60000,
+  volumeThreshold: 3,
+});
+
+// Log the actual SMTP error when the circuit opens or a call fails
+emailBreaker.on('open', () => {
+  console.error('[Email] Circuit breaker OPEN — SMTP is failing. Emails will be blocked until the circuit half-opens.');
+});
+emailBreaker.on('halfOpen', () => {
+  console.log('[Email] Circuit breaker half-open — testing SMTP connection.');
+});
+emailBreaker.on('close', () => {
+  console.log('[Email] Circuit breaker closed — SMTP is healthy.');
+});
+emailBreaker.on('failure', (err: Error) => {
+  console.error('[Email] SMTP send failed:', {
+    message: err?.message,
+    stack: err?.stack?.split('\n').slice(0, 3).join(' | '),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 emailBreaker.fallback(() => {
-  console.error('Email delivery failed; the parent can try the action again later.');
+  // The fallback runs when the circuit is open or the call times out.
+  // Re-throw so callers know the email was NOT delivered.
+  // (The actual error was already logged by the 'failure' event handler above.)
+  throw new Error('[Email] Delivery failed — circuit breaker fallback');
 });
 
 const sendEmail = async (message: EmailMessage): Promise<void> => {

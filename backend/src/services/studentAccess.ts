@@ -65,10 +65,14 @@ export async function parentHasStudentAccess(parentId: string, studentId: string
 }
 
 export async function canAccessStudent(studentId: string, requester: StudentAccessRequester): Promise<boolean> {
-  if (!requester.id || !requester.role) return false;
+  if (!requester.id || !requester.role) {
+    console.warn('[Access] canAccessStudent rejected — missing requester info:', { id: requester.id, role: requester.role, studentId });
+    return false;
+  }
   if (requester.role === 'admin') return true;
   if (requester.role === 'student') return requester.id === studentId;
   if (requester.role === 'teacher') return teacherHasStudentAccess(requester.id, studentId);
   if (requester.role === 'parent') return parentHasStudentAccess(requester.id, studentId);
+  console.warn('[Access] canAccessStudent rejected — unknown role:', { role: requester.role, studentId });
   return false;
 }

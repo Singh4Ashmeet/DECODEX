@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 
-type Theme = 'kid' | 'adult';
+type Theme = 'student' | 'teacher';
 
 interface ThemeContextType {
   theme: Theme;
@@ -13,7 +13,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
 
   // Determine theme based on user role
-  const theme: Theme = user?.role === 'student' ? 'kid' : 'adult';
+  const theme: Theme = user?.role === 'student' ? 'student' : 'teacher';
 
   // Apply theme to document.body for CSS selectors
   useEffect(() => {

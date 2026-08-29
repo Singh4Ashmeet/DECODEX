@@ -13,6 +13,12 @@ router.get('/:studentId', authenticate, async (req: AuthRequest, res) => {
 
   const hasAccess = await canAccessStudent(studentId, { id: req.user?.id, role: req.user?.role });
   if (!hasAccess) {
+    console.warn('[LearningPath] Access denied:', {
+      requesterId: req.user?.id,
+      requesterRole: req.user?.role,
+      requestedStudentId: studentId,
+      ip: req.ip,
+    });
     return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Access denied' } });
   }
 
