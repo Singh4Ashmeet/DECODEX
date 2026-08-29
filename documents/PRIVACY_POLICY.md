@@ -4,7 +4,7 @@
 **Last Updated:** August 8, 2026  
 **Applicable Jurisdiction:** India (Primary Launch Market)
 
-Decodex ("**Decodex**", "**we**", "**us**", or "**our**") operates the AI-powered reading screening and assessment platform accessible at `decodex-five.vercel.app` and associated backend API services (the "**Platform**"). Decodex is designed for educational use by students (ages 6–14), parents, teachers, and school administrators.
+Decodex ("**Decodex**", "**we**", "**us**", or "**our**") operates the AI-powered reading screening and assessment platform accessible at `decodex-mu.vercel.app` and associated backend API services (the "**Platform**"). Decodex is designed for educational use by students (ages 6–14), parents, teachers, and school administrators.
 
 This Privacy Policy explains how we collect, use, store, disclose, and protect personal data in compliance with the **Digital Personal Data Protection Act, 2023 ("DPDP Act")**, the **Information Technology Act, 2000**, and the **Information Technology (Reasonable Security Practices and Procedures and Sensitive Personal Data or Information) Rules, 2011 ("SPDI Rules")**.
 
