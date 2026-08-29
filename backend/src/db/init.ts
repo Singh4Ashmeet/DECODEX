@@ -173,6 +173,14 @@ async function applySchemaMigrationsAndSeed(client: Queryable) {
       console.log('Migration V13 applied successfully (idempotent).');
     }
 
+    // Apply V14 Migration (email_hash for deterministic email lookup)
+    const migrationV14Path = path.join(__dirname, 'migration_v14.sql');
+    if (fs.existsSync(migrationV14Path)) {
+      const migration = fs.readFileSync(migrationV14Path, 'utf-8');
+      await client.query(migration);
+      console.log('Migration V14 applied successfully (idempotent).');
+    }
+
     const usersCheck = await client.query('SELECT count(*) FROM users');
     const userCount = parseInt(usersCheck.rows[0].count);
     if (shouldSeedDemoData(userCount)) {

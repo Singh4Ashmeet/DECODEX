@@ -33,6 +33,7 @@ import {
   getProviderConfig,
   generateSAMLMetadata
 } from '../services/sso';
+import { decryptUserPII } from '../services/piiEncryption';
 import { randomBytes } from 'crypto';
 import jwt from 'jsonwebtoken';
 
@@ -405,12 +406,13 @@ router.get('/session', authenticate, async (req: any, res: any) => {
     maxAge: 7 * 24 * 60 * 60 * 1000
   });
   
+  const decryptedUser = decryptUserPII(user);
   res.json({ 
     user: {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      display_name: user.display_name,
+      id: decryptedUser.id,
+      email: decryptedUser.email,
+      role: decryptedUser.role,
+      display_name: decryptedUser.display_name,
       preferredLanguage: preferredLang
     },
     token

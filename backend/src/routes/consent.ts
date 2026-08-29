@@ -6,6 +6,7 @@ import { pool, query } from '../db';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 import { sendConsentEmail, sendConsentWithdrawalEmail, sendPasswordResetEmail, sendConsentRenewalEmail } from '../services/email';
+import { encryptUserPII, decryptUserPII, decryptPII, isEncrypted, hashEmail } from '../services/piiEncryption';
 import { eraseConsentDataForLink } from '../queue/consentErasure';
 
 const router = Router();
@@ -142,7 +143,7 @@ router.post('/link', authenticate, requireRole(['parent', 'admin']), async (req:
     res.status(201).json({
       student: {
         id: student.id,
-        display_name: student.display_name,
+        display_name: isEncrypted(student.display_name) ? decryptPII(student.display_name) : student.display_name,
         grade_level: student.grade_level,
       },
     });
@@ -279,7 +280,11 @@ router.get('/children', authenticate, requireRole(['parent', 'admin']), async (r
       [req.user!.id]
     );
 
-    res.json({ children: result.rows as LinkedChild[] });
+    const children = result.rows.map(row => ({
+      ...row,
+      display_name: isEncrypted(row.display_name) ? decryptPII(row.display_name) : row.display_name,
+    }));
+    res.json({ children });
   } catch {
     console.error('Failed to fetch linked children.');
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Server error' } });
@@ -371,7 +376,12 @@ router.get('/:token', async (req, res) => {
     }
 
     const { failed_attempts, ...student } = tokenRecord;
-    res.json({ student, attempts_remaining: Math.max(0, 5 - failed_attempts) });
+    // Decrypt PII fields for the consent page display
+    const decryptedStudent = {
+      display_name: isEncrypted(student.display_name) ? decryptPII(student.display_name) : student.display_name,
+      grade_level: student.grade_level,
+    };
+    res.json({ student: decryptedStudent, attempts_remaining: Math.max(0, 5 - failed_attempts) });
   } catch {
     console.error('Failed to validate consent token.');
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Server error' } });
@@ -498,8 +508,8 @@ router.post('/:token/confirm', consentConfirmLimiter, async (req, res) => {
     let parentId = tokenRecord.parent_id;
     if (!parentId && tokenRecord.email) {
       const parentLookup = await client.query(
-        'SELECT id FROM users WHERE email = $1 AND role = \'parent\' AND deleted_at IS NULL',
-        [tokenRecord.email]
+        'SELECT id FROM users WHERE email_hash = $1 AND role = \'parent\' AND deleted_at IS NULL',
+        [hashEmail(tokenRecord.email)]
       );
       if (parentLookup.rows.length > 0) {
         parentId = parentLookup.rows[0].id;
@@ -507,13 +517,15 @@ router.post('/:token/confirm', consentConfirmLimiter, async (req, res) => {
         // Auto-create minimal parent account with password reset token
         const resetToken = randomBytes(32).toString('hex');
         const resetExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        const encryptedParentEmail = encryptUserPII({ email: tokenRecord.email }).email;
+        const parentEmailHash = hashEmail(tokenRecord.email);
         const newParentResult = await client.query(
           [
-            'INSERT INTO users (email, password_hash, role, display_name, password_reset_token, password_reset_expires)',
-            'VALUES ($1, $2, \'parent\', $3, $4, $5)',
+            'INSERT INTO users (email, password_hash, role, display_name, password_reset_token, password_reset_expires, email_hash)',
+            'VALUES ($1, $2, \'parent\', $3, $4, $5, $6)',
             'RETURNING id',
           ].join('\n'),
-          [tokenRecord.email, await bcrypt.hash(randomBytes(32).toString('hex'), 12), 'Parent', resetToken, resetExpires]
+          [encryptedParentEmail, await bcrypt.hash(randomBytes(32).toString('hex'), 12), 'Parent', resetToken, resetExpires, parentEmailHash]
         );
         parentId = newParentResult.rows[0].id;
 

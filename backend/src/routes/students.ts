@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { query } from '../db';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { getConsentStatus } from '../middleware/consent';
+import { decryptPII, isEncrypted } from '../services/piiEncryption';
 
 const router = Router();
 
@@ -110,8 +111,12 @@ router.get('/me/consent-status', authenticate, async (req: AuthRequest, res) => 
     res.json({
       invite_code: inviteCode,
       ...consentStatus,
-      pending_parent_name: pendingParent?.pending_parent_name || null,
-      pending_parent_email: pendingParent?.pending_parent_email || null,
+      pending_parent_name: pendingParent?.pending_parent_name
+        ? (isEncrypted(pendingParent.pending_parent_name) ? decryptPII(pendingParent.pending_parent_name) : pendingParent.pending_parent_name)
+        : null,
+      pending_parent_email: pendingParent?.pending_parent_email
+        ? (isEncrypted(pendingParent.pending_parent_email) ? decryptPII(pendingParent.pending_parent_email) : pendingParent.pending_parent_email)
+        : null,
     });
   } catch {
     console.error('Failed to fetch consent status.');

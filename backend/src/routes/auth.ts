@@ -6,7 +6,7 @@ import { query } from '../db';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authLimiter } from '../middleware/rateLimiters';
 import { sendPasswordResetEmail } from '../services/email';
-import { encryptUserPII } from '../services/piiEncryption';
+import { encryptUserPII, decryptUserPII, hashEmail } from '../services/piiEncryption';
 import { verifyTOTP, isMFARequired } from '../services/mfa';
 
 // Account lockout constants (C-2)
@@ -59,14 +59,15 @@ router.post('/register', async (req, res) => {
     // Encrypt PII fields
     const encryptedEmail = encryptUserPII({ email }).email;
     const encryptedDisplayName = encryptUserPII({ display_name }).display_name;
+    const emailHash = hashEmail(email);
     
     const result = await query(
-      `INSERT INTO users (email, password_hash, role, display_name, grade_level, invite_code)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, email, role, display_name, preferred_language`,
-      [encryptedEmail, password_hash, role, encryptedDisplayName, grade_level ?? null, invite_code]
+      `INSERT INTO users (email, password_hash, role, display_name, grade_level, invite_code, email_hash)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, email, role, display_name, preferred_language`,
+      [encryptedEmail, password_hash, role, encryptedDisplayName, grade_level ?? null, invite_code, emailHash]
     );
 
-    const user = result.rows[0];
+    const user = decryptUserPII(result.rows[0]);
     const token = jwt.sign({ id: user.id, role: user.role, preferredLanguage: user.preferred_language }, JWT_SECRET, { expiresIn: '7d' });
 
     res.cookie('token', token, getCookieOptions());
@@ -115,14 +116,15 @@ router.post('/register/parent', async (req, res) => {
     // Encrypt PII fields
     const encryptedEmail = encryptUserPII({ email }).email;
     const encryptedDisplayName = encryptUserPII({ display_name }).display_name;
+    const emailHash = hashEmail(email);
 
     const result = await query(
-      `INSERT INTO users (email, password_hash, role, display_name)
-       VALUES ($1, $2, $3, $4) RETURNING id, email, role, display_name, preferred_language`,
-      [encryptedEmail, password_hash, role, encryptedDisplayName]
+      `INSERT INTO users (email, password_hash, role, display_name, email_hash)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id, email, role, display_name, preferred_language`,
+      [encryptedEmail, password_hash, role, encryptedDisplayName, emailHash]
     );
 
-    const user = result.rows[0];
+    const user = decryptUserPII(result.rows[0]);
     const token = jwt.sign({ id: user.id, role: user.role, preferredLanguage: user.preferred_language }, JWT_SECRET, { expiresIn: '7d' });
 
     res.cookie('token', token, getCookieOptions());
@@ -155,12 +157,16 @@ router.post('/login', async (req, res) => {
   }
 
   try {
-    const result = await query('SELECT * FROM users WHERE email = $1 AND deleted_at IS NULL', [email]);
+    // Look up user by deterministic email hash (HMAC-SHA256)
+    const emailLower = email.trim().toLowerCase();
+    const emailHash = hashEmail(emailLower);
+    const result = await query('SELECT * FROM users WHERE email_hash = $1 AND deleted_at IS NULL', [emailHash]);
+    
     if (result.rows.length === 0) {
       return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid credentials' } });
     }
 
-    const user = result.rows[0];
+    const user = decryptUserPII(result.rows[0]);
 
     // SECURITY (C-2): Enforce per-account lockout before doing expensive bcrypt work.
     if (user.locked_until && new Date(user.locked_until) > new Date()) {
@@ -272,7 +278,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found' } });
     }
-    const user = result.rows[0];
+    const user = decryptUserPII(result.rows[0]);
     res.json({
       user: {
         id: user.id,
@@ -334,7 +340,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found' } });
     }
 
-    const user = result.rows[0];
+    const user = decryptUserPII(result.rows[0]);
     res.json({
       user: {
         id: user.id,
@@ -366,12 +372,12 @@ router.post('/password-reset/request', authLimiter, async (req, res) => {
   }
 
   try {
-    // Encrypt email for lookup
-    const encryptedEmail = encryptUserPII({ email: email.trim().toLowerCase() }).email;
+    // Look up by deterministic email hash
+    const emailHash = hashEmail(email.trim());
     
     const result = await query(
-      'SELECT id FROM users WHERE email = $1 AND role = \'parent\' AND deleted_at IS NULL',
-      [encryptedEmail]
+      'SELECT id FROM users WHERE email_hash = $1 AND role = \'parent\' AND deleted_at IS NULL',
+      [emailHash]
     );
 
     // Always return 200 to avoid email enumeration

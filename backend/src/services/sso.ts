@@ -10,7 +10,7 @@
 import { Strategy as SAMLStrategy } from '@node-saml/passport-saml';
 import { Strategy as OIDCStrategy } from 'passport-openidconnect';
 import { query } from '../db';
-import { encryptUserPII } from './piiEncryption';
+import { encryptUserPII, hashEmail } from './piiEncryption';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcrypt';
 
@@ -149,10 +149,11 @@ export async function findOrCreateSSOUser(
     return { user: userResult.rows[0], isNew: false };
   }
   
-  // Check if user exists by email
-  const encryptedEmail = encryptUserPII({ email: ssoProfile.email }).email;
-  const userResult = await query('SELECT * FROM users WHERE email = $1 AND deleted_at IS NULL', [encryptedEmail]);
+  // Check if user exists by email (deterministic hash lookup)
+  const emailHash = hashEmail(ssoProfile.email);
+  const userResult = await query('SELECT * FROM users WHERE email_hash = $1 AND deleted_at IS NULL', [emailHash]);
   
+  const encryptedEmail = encryptUserPII({ email: ssoProfile.email }).email;
   let user;
   let isNew = false;
   
@@ -169,11 +170,12 @@ export async function findOrCreateSSOUser(
     const passwordHash = await bcrypt.hash(randomBytes(32).toString('hex'), 12);
     const encryptedDisplayName = encryptUserPII({ display_name: ssoProfile.displayName }).display_name;
     
+    const ssoEmailHash = hashEmail(ssoProfile.email);
     const newUserResult = await query(
-      `INSERT INTO users (email, password_hash, role, display_name, school_id)
-       VALUES ($1, $2, $3, $4, (SELECT school_id FROM sso_providers WHERE id = $5))
+      `INSERT INTO users (email, password_hash, role, display_name, school_id, email_hash)
+       VALUES ($1, $2, $3, $4, (SELECT school_id FROM sso_providers WHERE id = $5), $6)
        RETURNING *`,
-      [encryptedEmail, passwordHash, ssoProfile.role || 'teacher', encryptedDisplayName, providerId]
+      [encryptedEmail, passwordHash, ssoProfile.role || 'teacher', encryptedDisplayName, providerId, ssoEmailHash]
     );
     
     user = newUserResult.rows[0];

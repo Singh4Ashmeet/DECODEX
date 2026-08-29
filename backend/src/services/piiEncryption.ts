@@ -135,3 +135,13 @@ export function decryptUserPII(user: Record<string, any>): Record<string, any> {
 export function generateEncryptionKey(): string {
   return crypto.randomBytes(KEY_LENGTH).toString('base64');
 }
+
+/**
+ * Deterministic HMAC-SHA256 hash for email lookup.
+ * Uses the same PII_ENCRYPTION_KEY as the AES encryption.
+ * Returns a 64-char hex string suitable for indexing.
+ */
+export function hashEmail(email: string): string {
+  const key = getEncryptionKey();
+  return crypto.createHmac('sha256', key).update(email.toLowerCase().trim()).digest('hex');
+}
