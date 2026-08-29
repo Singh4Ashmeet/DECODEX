@@ -134,8 +134,11 @@ router.post('/link', authenticate, requireRole(['parent', 'admin']), async (req:
     }
 
     // Email dispatch is no longer required; links are managed in-app via the web UI.
+    // Decrypt PII fields before passing to token/email services (they expect plaintext).
     try {
-      await issueConsentToken(req.user!.id, student.id, parent.email, student.display_name);
+      const parentEmail = isEncrypted(parent.email) ? decryptPII(parent.email) : parent.email;
+      const studentName = isEncrypted(student.display_name) ? decryptPII(student.display_name) : student.display_name;
+      await issueConsentToken(req.user!.id, student.id, parentEmail, studentName);
     } catch {
       // Ignore background email failure in favor of in-app web consent
     }
@@ -202,7 +205,9 @@ router.post('/request', authenticate, requireRole(['parent', 'admin']), async (r
       [req.user!.id, pendingLink.id]
     );
 
-    await issueConsentToken(req.user!.id, pendingLink.id, pendingLink.parent_email, pendingLink.display_name);
+    const reqParentEmail = isEncrypted(pendingLink.parent_email) ? decryptPII(pendingLink.parent_email) : pendingLink.parent_email;
+    const reqStudentName = isEncrypted(pendingLink.display_name) ? decryptPII(pendingLink.display_name) : pendingLink.display_name;
+    await issueConsentToken(req.user!.id, pendingLink.id, reqParentEmail, reqStudentName);
 
     res.status(201).json({ consent_email_requested: true });
   } catch {
@@ -507,9 +512,11 @@ router.post('/:token/confirm', consentConfirmLimiter, async (req, res) => {
     // If no parent account exists yet, create a minimal one
     let parentId = tokenRecord.parent_id;
     if (!parentId && tokenRecord.email) {
+      // tokenRecord.email may be plaintext (from request-unverified) or encrypted (legacy consent/link)
+      const tokenEmail = isEncrypted(tokenRecord.email) ? decryptPII(tokenRecord.email) : tokenRecord.email;
       const parentLookup = await client.query(
         'SELECT id FROM users WHERE email_hash = $1 AND role = \'parent\' AND deleted_at IS NULL',
-        [hashEmail(tokenRecord.email)]
+        [hashEmail(tokenEmail)]
       );
       if (parentLookup.rows.length > 0) {
         parentId = parentLookup.rows[0].id;
@@ -517,8 +524,8 @@ router.post('/:token/confirm', consentConfirmLimiter, async (req, res) => {
         // Auto-create minimal parent account with password reset token
         const resetToken = randomBytes(32).toString('hex');
         const resetExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-        const encryptedParentEmail = encryptUserPII({ email: tokenRecord.email }).email;
-        const parentEmailHash = hashEmail(tokenRecord.email);
+        const encryptedParentEmail = encryptUserPII({ email: tokenEmail }).email;
+        const parentEmailHash = hashEmail(tokenEmail);
         const newParentResult = await client.query(
           [
             'INSERT INTO users (email, password_hash, role, display_name, password_reset_token, password_reset_expires, email_hash)',
@@ -531,7 +538,7 @@ router.post('/:token/confirm', consentConfirmLimiter, async (req, res) => {
 
         // Send password reset email after transaction commits
         // We'll do this after the commit by queuing it
-        await sendPasswordResetEmail(tokenRecord.email, resetToken);
+        await sendPasswordResetEmail(tokenEmail, resetToken);
       }
     }
 

@@ -6,7 +6,7 @@ import { query } from '../db';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authLimiter } from '../middleware/rateLimiters';
 import { sendPasswordResetEmail } from '../services/email';
-import { encryptUserPII, decryptUserPII, hashEmail } from '../services/piiEncryption';
+import { encryptUserPII, decryptUserPII, decryptPII, isEncrypted, hashEmail } from '../services/piiEncryption';
 import { verifyTOTP, isMFARequired } from '../services/mfa';
 
 // Account lockout constants (C-2)
@@ -160,8 +160,28 @@ router.post('/login', async (req, res) => {
     // Look up user by deterministic email hash (HMAC-SHA256)
     const emailLower = email.trim().toLowerCase();
     const emailHash = hashEmail(emailLower);
-    const result = await query('SELECT * FROM users WHERE email_hash = $1 AND deleted_at IS NULL', [emailHash]);
+    let result = await query('SELECT * FROM users WHERE email_hash = $1 AND deleted_at IS NULL', [emailHash]);
     
+    // FALLBACK: legacy users registered before email_hash migration (V14)
+    // Their email_hash is NULL, so the hash lookup misses. Scan by decrypting.
+    if (result.rows.length === 0) {
+      const legacy = await query(
+        "SELECT * FROM users WHERE email_hash IS NULL AND deleted_at IS NULL",
+        []
+      );
+      for (const row of legacy.rows) {
+        try {
+          const decryptedEmail = isEncrypted(row.email) ? decryptPII(row.email) : row.email;
+          if (decryptedEmail.toLowerCase().trim() === emailLower) {
+            // Backfill email_hash for this user so future lookups are fast
+            await query('UPDATE users SET email_hash = $1 WHERE id = $2', [emailHash, row.id]);
+            result = { rows: [row], rowCount: 1, command: 'SELECT', oid: 0, fields: [] } as any;
+            break;
+          }
+        } catch { /* encrypted with wrong key or corrupt — skip */ }
+      }
+    }
+
     if (result.rows.length === 0) {
       return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid credentials' } });
     }
