@@ -1,10 +1,18 @@
 import nodemailer from 'nodemailer';
 import CircuitBreaker from 'opossum';
+import fs from 'fs';
+import path from 'path';
+
+// Support configurable SMTP — defaults to Gmail, but can be overridden
+// with SMTP_HOST / SMTP_PORT / SMTP_SECURE for local dev (e.g. Mailpit).
+const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+const smtpPort = Number(process.env.SMTP_PORT) || 465;
+const smtpSecure = process.env.SMTP_SECURE !== 'false';
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
+  host: smtpHost,
+  port: smtpPort,
+  secure: smtpSecure,
   auth: {
     user: process.env.GMAIL_USER || '',
     pass: process.env.GMAIL_APP_PASSWORD || '',
@@ -17,7 +25,26 @@ interface EmailMessage {
   text: string;
 }
 
+const EMAIL_LOG_DIR = path.join(__dirname, '..', '..', 'email-captures');
+
 const deliverEmail = async (message: EmailMessage): Promise<void> => {
+  // Always log email to disk for local dev / test inspection
+  try {
+    if (!fs.existsSync(EMAIL_LOG_DIR)) {
+      fs.mkdirSync(EMAIL_LOG_DIR, { recursive: true });
+    }
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `${timestamp}_${message.to.replace(/[^a-zA-Z0-9@.]/g, '_')}.json`;
+    fs.writeFileSync(
+      path.join(EMAIL_LOG_DIR, filename),
+      JSON.stringify({ from: process.env.GMAIL_USER || 'no-reply@decodex.local', ...message, capturedAt: new Date().toISOString() }, null, 2),
+      'utf-8'
+    );
+    console.log(`[EmailCapture] Email logged to ${filename}`);
+  } catch (logErr) {
+    console.warn('[EmailCapture] Failed to log email to disk:', logErr);
+  }
+
   await transporter.sendMail({
     from: process.env.GMAIL_USER || 'no-reply@decodex.local',
     ...message,

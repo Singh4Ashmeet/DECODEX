@@ -23,6 +23,15 @@ services:
       - decodex_redisdata:/data
     restart: unless-stopped
 
+  # Local email catcher — inspect at http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: decodex-mailpit
+    ports:
+      - "1025:1025"   # SMTP (backend connects here)
+      - "8025:8025"   # Web UI (browse captured emails)
+    restart: unless-stopped
+
 volumes:
   decodex_pgdata:
   decodex_redisdata:

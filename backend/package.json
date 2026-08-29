@@ -4,7 +4,7 @@
   "description": "",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "ts-node-dev --respawn src/server.ts",
+    "dev": "ts-node-dev --respawn --max-old-space-size=4096 src/server.ts",
     "build": "tsc && node scripts/copy-db.js",
     "start": "node dist/server.js",
     "migrate": "ts-node src/scripts/migrate.ts",
