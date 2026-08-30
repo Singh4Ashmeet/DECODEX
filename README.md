@@ -1,6 +1,6 @@
 ﻿# Decodex — AI-Powered Reading Screening & Assessment Platform for Dyslexia Education
 
-![CI](https://github.com/ADITYAMITTAL1604/DECODEX/actions/workflows/ci.yml/badge.svg)
+[![CI](https://github.com/Singh4Ashmeet/DECODEX/actions/workflows/ci.yml/badge.svg)](https://github.com/Singh4Ashmeet/DECODEX/actions)
 
 Decodex captures students reading aloud, transcribes via Whisper, aligns against source text with Needleman-Wunsch DP, classifies error patterns using Orton-Gillingham taxonomy (GPT-4o-mini), generates personalised practice drills, and gives teachers and parents actionable reading analytics with human-in-the-loop override capability.
 
