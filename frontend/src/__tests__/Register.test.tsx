@@ -57,6 +57,7 @@ describe('Register Page', () => {
     await user.type(screen.getByLabelText(/student name|your name/i), 'Test User');
     await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
     await user.type(screen.getByLabelText(/password/i), 'securepass123');
+    await user.type(screen.getByLabelText(/date of birth/i), '2015-06-15');
     await user.click(screen.getByRole('checkbox', { name: /terms of service/i }));
     
     const submitBtn = screen.getByRole('button', { name: /create.*account/i });
@@ -76,6 +77,7 @@ describe('Register Page', () => {
     await user.type(screen.getByLabelText(/student name|your name/i), 'Test User');
     await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
     await user.type(screen.getByLabelText(/password/i), 'securepass123');
+    await user.type(screen.getByLabelText(/date of birth/i), '2015-06-15');
     await user.click(screen.getByRole('checkbox', { name: /terms of service/i }));
     
     const submitBtn = screen.getByRole('button', { name: /create.*account/i });
