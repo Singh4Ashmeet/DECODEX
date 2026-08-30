@@ -273,45 +273,6 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// TEMPORARY: Diagnose Resend email delivery — remove after debugging
-app.get('/api/v1/email/diagnostic', async (_req, res) => {
-  const key = process.env.RESEND_API_KEY || '';
-  const result: Record<string, unknown> = {
-    keyConfigured: !!key,
-    keyPrefix: key ? key.substring(0, 8) + '...' : 'NOT SET',
-    keyLength: key.length,
-    fromAddress: process.env.EMAIL_FROM || 'Decodex <onboarding@resend.dev>',
-    resendSdkVersion: 'unknown',
-  };
-
-  if (!key) {
-    result.error = 'RESEND_API_KEY not configured';
-    return res.json(result);
-  }
-
-  try {
-    const { Resend } = await import('resend');
-    const resend = new Resend(key);
-
-    // Test API key validity by listing API keys (lightweight call)
-    const apiKeysResult = await resend.apiKeys.list();
-    result.apiKeysSuccess = !apiKeysResult.error;
-    result.apiKeysError = apiKeysResult.error || null;
-
-    const domainsResult = await resend.domains.list();
-    result.domainsSuccess = !domainsResult.error;
-    result.domainsError = domainsResult.error || null;
-    result.domainsRaw = JSON.stringify(domainsResult).substring(0, 500);
-
-    result.apiReachable = true;
-  } catch (err: any) {
-    result.apiReachable = false;
-    result.error = err?.message || String(err);
-  }
-
-  res.json(result);
-});
-
 app.use('/api/v1', (req, res) => {
   res.status(404).json({ error: { code: 'NOT_FOUND', message: 'API route not found' } });
 });
