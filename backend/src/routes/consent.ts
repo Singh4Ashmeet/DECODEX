@@ -560,7 +560,12 @@ router.post('/:token/confirm', consentConfirmLimiter, async (req, res) => {
 
         // Send password reset email after transaction commits
         // We'll do this after the commit by queuing it
-        await sendPasswordResetEmail(tokenEmail, resetToken);
+        // Best-effort email - do not block consent if delivery fails
+        try {
+          await sendPasswordResetEmail(tokenEmail, resetToken);
+        } catch (emailErr) {
+          console.error("[Consent] Password reset email failed:", emailErr);
+        }
       }
     }
 

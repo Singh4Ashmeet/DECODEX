@@ -35,7 +35,7 @@ interface ParentRegistrationBody {
 
 // POST /api/v1/auth/register
 router.post('/register', async (req, res) => {
-  const { email, password, display_name, grade_level } = req.body;
+  const { email, password, display_name, grade_level, date_of_birth } = req.body;
   
   if (!email || !password || !display_name) {
     return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Missing required fields' } });
@@ -50,6 +50,14 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Password must be at least 8 characters' } });
   }
 
+  if (typeof date_of_birth !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date_of_birth)) {
+    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Date of birth is required in YYYY-MM-DD format' } });
+  }
+  const dobDate = new Date(date_of_birth + 'T00:00:00.000Z');
+  if (Number.isNaN(dobDate.getTime()) || dobDate > new Date()) {
+    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid date of birth' } });
+  }
+
   const role = 'student';
 
   try {
@@ -62,9 +70,9 @@ router.post('/register', async (req, res) => {
     const emailHash = hashEmail(email);
     
     const result = await query(
-      `INSERT INTO users (email, password_hash, role, display_name, grade_level, invite_code, email_hash)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, email, role, display_name, preferred_language`,
-      [encryptedEmail, password_hash, role, encryptedDisplayName, grade_level ?? null, invite_code, emailHash]
+      `INSERT INTO users (email, password_hash, role, display_name, grade_level, invite_code, email_hash, date_of_birth)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, email, role, display_name, preferred_language`,
+      [encryptedEmail, password_hash, role, encryptedDisplayName, grade_level ?? null, invite_code, emailHash, date_of_birth]
     );
 
     const user = decryptUserPII(result.rows[0]);
@@ -126,6 +134,20 @@ router.post('/register/parent', async (req, res) => {
 
     const user = decryptUserPII(result.rows[0]);
     const token = jwt.sign({ id: user.id, role: user.role, preferredLanguage: user.preferred_language }, JWT_SECRET, { expiresIn: '7d' });
+
+    // Send welcome/set-password email to new parent account
+    const parentResetToken = randomBytes(32).toString("hex");
+    const parentResetExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await query(
+      'UPDATE users SET password_reset_token = $1, password_reset_expires = $2 WHERE id = $3',
+      [parentResetToken, parentResetExpires, result.rows[0].id]
+    );
+    // Best-effort email - do not block registration if delivery fails
+    try {
+      await sendPasswordResetEmail(email.trim().toLowerCase(), parentResetToken);
+    } catch (emailErr) {
+      console.error("[Auth] Welcome email failed:", emailErr);
+    }
 
     res.cookie('token', token, getCookieOptions());
 

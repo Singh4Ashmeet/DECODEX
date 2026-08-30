@@ -28,6 +28,7 @@ describe('Auth Routes', () => {
           email: 'new@decodex.com',
           password: 'securepass123',
           display_name: 'New Student',
+          date_of_birth: '2015-06-15',
           grade_level: 3,
         });
 
@@ -48,6 +49,7 @@ describe('Auth Routes', () => {
           email: 'exists@decodex.com',
           password: 'securepass123',
           display_name: 'Duplicate',
+          date_of_birth: '2015-06-15',
         });
 
       expect(res.status).toBe(409);
@@ -58,6 +60,7 @@ describe('Auth Routes', () => {
       const res = await request(app)
         .post('/api/v1/auth/register')
         .send({ email: 'test@decodex.com' }); // missing password and display_name
+        date_of_birth: '2015-06-15',
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
@@ -70,6 +73,7 @@ describe('Auth Routes', () => {
           email: 'not-an-email',
           password: 'securepass123',
           display_name: 'Test',
+          date_of_birth: '2015-06-15',
         });
 
       expect(res.status).toBe(400);
@@ -84,6 +88,7 @@ describe('Auth Routes', () => {
           email: 'test@decodex.com',
           password: 'short',
           display_name: 'Test',
+          date_of_birth: '2015-06-15',
         });
 
       expect(res.status).toBe(400);

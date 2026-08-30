@@ -121,6 +121,7 @@ describe('Role Immutability (SEC-10)', () => {
           email: 'new@decodex.com',
           password: 'securepass123',
           display_name: 'New Student',
+          date_of_birth: '2015-06-15',
           grade_level: 3,
           role: 'teacher', // Attempted injection
         });

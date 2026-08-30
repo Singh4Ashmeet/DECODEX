@@ -15,6 +15,7 @@ export default function Register() {
     password: '',
     display_name: '',
     grade_level: 1,
+    date_of_birth: '',
   });
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -124,6 +125,7 @@ export default function Register() {
             />
           </Field>
           {accountType === 'student' ? (
+            <>
             <Field
               label="Grade Level"
               id="grade-level"
@@ -142,6 +144,22 @@ export default function Register() {
                 ))}
               </select>
             </Field>
+            <Field
+              label="Date of Birth"
+              id="date-of-birth"
+              hint="Required for parental consent verification."
+            >
+              <input
+                id="date-of-birth"
+                type="date"
+                value={formData.date_of_birth}
+                onChange={(event) => setFormData({ ...formData, date_of_birth: event.target.value })}
+                className={fieldControlClass}
+                max={new Date().toISOString().split('T')[0]}
+                required
+              />
+            </Field>
+            </>
           ) : null}
 
           <div className="flex items-start gap-3 mt-1">
