@@ -59,6 +59,7 @@ export default function ParentHome() {
     try {
       const response = await apiFetch<{ children: LinkedChild[] }>('/parent/children');
       setChildren(response.children);
+      setError('');
       if (response.children.length > 0 && !selectedChildId) {
         setSelectedChildId(response.children[0].id);
       }
@@ -66,6 +67,7 @@ export default function ParentHome() {
       try {
         const response = await apiFetch<{ children: LinkedChild[] }>('/consent/children');
         setChildren(response.children);
+        setError('');
       } catch (requestError) {
         setError(requestError instanceof Error ? requestError.message : 'Unable to load linked children.');
       }
@@ -94,11 +96,15 @@ export default function ParentHome() {
     setError('');
     setResendingId(studentId);
     try {
-      await apiFetch('/consent/request', {
+      const result = await apiFetch<{ consent_email_requested: boolean; consent_email_sent?: boolean }>('/consent/request', {
         method: 'POST',
         body: JSON.stringify({ student_id: studentId }),
       });
-      setNotice({ studentId, message: `A consent verification email was sent to you for ${studentName}. Please check your inbox and complete the date-of-birth step.` });
+      if (result.consent_email_sent === false) {
+        setNotice({ studentId, message: `Consent request recorded for ${studentName}, but the email could not be delivered right now. You can try again — the consent link is still valid.` });
+      } else {
+        setNotice({ studentId, message: `A consent verification email was sent to you for ${studentName}. Please check your inbox and complete the date-of-birth step.` });
+      }
       await loadChildren();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to send consent email.');

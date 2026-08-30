@@ -138,9 +138,14 @@ router.post('/link', authenticate, requireRole(['parent', 'admin']), async (req:
     try {
       const parentEmail = isEncrypted(parent.email) ? decryptPII(parent.email) : parent.email;
       const studentName = isEncrypted(student.display_name) ? decryptPII(student.display_name) : student.display_name;
-      await issueConsentToken(req.user!.id, student.id, parentEmail, studentName);
+      const token = await issueConsentToken(req.user!.id, student.id, parentEmail, studentName);
+      try {
+        await sendConsentEmail(parentEmail, token, studentName);
+      } catch (emailErr) {
+        console.error('[Consent] Consent link email delivery failed:', emailErr);
+      }
     } catch {
-      // Ignore background email failure in favor of in-app web consent
+      // Token creation itself failed — log but don't block the link
     }
 
     res.status(201).json({
@@ -207,9 +212,19 @@ router.post('/request', authenticate, requireRole(['parent', 'admin']), async (r
 
     const reqParentEmail = isEncrypted(pendingLink.parent_email) ? decryptPII(pendingLink.parent_email) : pendingLink.parent_email;
     const reqStudentName = isEncrypted(pendingLink.display_name) ? decryptPII(pendingLink.display_name) : pendingLink.display_name;
-    await issueConsentToken(req.user!.id, pendingLink.id, reqParentEmail, reqStudentName);
 
-    res.status(201).json({ consent_email_requested: true });
+    // Create the consent token; email delivery is best-effort and must not
+    // fail the request (the token is already committed to the DB).
+    const token = await issueConsentToken(req.user!.id, pendingLink.id, reqParentEmail, reqStudentName);
+    let emailSent = true;
+    try {
+      await sendConsentEmail(reqParentEmail, token, reqStudentName);
+    } catch (emailErr) {
+      console.error('[Consent] Email delivery failed for existing token:', emailErr);
+      emailSent = false;
+    }
+
+    res.status(201).json({ consent_email_requested: true, consent_email_sent: emailSent });
   } catch {
     console.error('Failed to request consent email.');
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Server error' } });
@@ -261,9 +276,16 @@ router.post('/request-unverified', async (req, res: Response) => {
     );
 
     // Issue token with parent_id=NULL, email=provided email
-    await issueConsentToken(null, student.id, email.trim().toLowerCase(), student.display_name);
+    const unverifiedToken = await issueConsentToken(null, student.id, email.trim().toLowerCase(), student.display_name);
+    let emailSent = true;
+    try {
+      await sendConsentEmail(email.trim().toLowerCase(), unverifiedToken, student.display_name);
+    } catch (emailErr) {
+      console.error('[Consent] Unverified consent email delivery failed:', emailErr);
+      emailSent = false;
+    }
 
-    res.status(201).json({ consent_email_sent: true });
+    res.status(201).json({ consent_email_sent: emailSent });
   } catch {
     console.error('Failed to send unverified consent email.');
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Server error' } });
@@ -640,9 +662,16 @@ router.post('/:linkId/renew', authenticate, requireRole(['parent', 'admin']), as
     );
 
     // Issue new consent token
-    await issueConsentToken(link.parent_id, link.student_id, link.parent_email, link.student_name);
+    const renewToken = await issueConsentToken(link.parent_id, link.student_id, link.parent_email, link.student_name);
+    let emailSent = true;
+    try {
+      await sendConsentEmail(link.parent_email, renewToken, link.student_name);
+    } catch (emailErr) {
+      console.error('[Consent] Renewal email delivery failed:', emailErr);
+      emailSent = false;
+    }
 
-    res.json({ consent_renewal_email_sent: true });
+    res.json({ consent_renewal_email_sent: emailSent });
   } catch {
     console.error('Failed to send consent renewal email.');
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Server error' } });
@@ -679,7 +708,7 @@ router.get('/expiring', authenticate, requireRole(['parent', 'admin']), async (r
 
 export default router;
 
-async function issueConsentToken(parentId: string | null, studentId: string, parentEmail: string, studentName: string): Promise<void> {
+async function issueConsentToken(parentId: string | null, studentId: string, parentEmail: string, studentName: string): Promise<string> {
   const token = randomBytes(32).toString('hex');
 
   await query(
@@ -690,7 +719,7 @@ async function issueConsentToken(parentId: string | null, studentId: string, par
     [token, parentId, studentId, parentEmail]
   );
 
-  await sendConsentEmail(parentEmail, token, studentName);
+  return token;
 }
 
 function isValidDate(value: unknown): value is string {
