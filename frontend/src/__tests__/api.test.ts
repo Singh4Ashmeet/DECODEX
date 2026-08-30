@@ -25,35 +25,35 @@ describe('getApiBaseUrl()', () => {
   });
 
   it('should return the URL as-is when valid https URL is provided', async () => {
-    vi.stubEnv('VITE_API_BASE_URL', 'https://decodex-backend.onrender.com');
+    vi.stubEnv('VITE_API_BASE_URL', 'https://decodex-n0gq.onrender.com');
 
     const { getApiBaseUrl } = await import('../lib/api');
     const result = getApiBaseUrl();
-    expect(result).toBe('https://decodex-backend.onrender.com');
+    expect(result).toBe('https://decodex-n0gq.onrender.com');
   });
 
   it('should strip trailing slashes', async () => {
-    vi.stubEnv('VITE_API_BASE_URL', 'https://decodex-backend.onrender.com/');
+    vi.stubEnv('VITE_API_BASE_URL', 'https://decodex-n0gq.onrender.com/');
 
     const { getApiBaseUrl } = await import('../lib/api');
     const result = getApiBaseUrl();
-    expect(result).toBe('https://decodex-backend.onrender.com');
+    expect(result).toBe('https://decodex-n0gq.onrender.com');
   });
 
   it('should strip surrounding quotes from the value', async () => {
-    vi.stubEnv('VITE_API_BASE_URL', '"https://decodex-backend.onrender.com"');
+    vi.stubEnv('VITE_API_BASE_URL', '"https://decodex-n0gq.onrender.com"');
 
     const { getApiBaseUrl } = await import('../lib/api');
     const result = getApiBaseUrl();
-    expect(result).toBe('https://decodex-backend.onrender.com');
+    expect(result).toBe('https://decodex-n0gq.onrender.com');
   });
 
   it('should prepend https:// if no protocol is provided', async () => {
-    vi.stubEnv('VITE_API_BASE_URL', 'decodex-backend.onrender.com');
+    vi.stubEnv('VITE_API_BASE_URL', 'decodex-n0gq.onrender.com');
 
     const { getApiBaseUrl } = await import('../lib/api');
     const result = getApiBaseUrl();
-    expect(result).toBe('https://decodex-backend.onrender.com');
+    expect(result).toBe('https://decodex-n0gq.onrender.com');
   });
 
   it('should preserve http:// if explicitly provided', async () => {

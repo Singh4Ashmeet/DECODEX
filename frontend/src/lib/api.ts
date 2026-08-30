@@ -11,7 +11,7 @@ export function getApiBaseUrl(): string {
 
   // If deployed on Vercel and VITE_API_BASE_URL wasn't baked into the build, fallback to live Render backend
   if (!raw && typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
-    return 'https://decodex-backend.onrender.com';
+    return 'https://decodex-n0gq.onrender.com';
   }
 
   if (!raw) return '';

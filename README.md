@@ -14,7 +14,7 @@ Decodex captures students reading aloud, transcribes via Whisper, aligns against
 | Component | URL |
 |-----------|-----|
 | **Frontend** | [decodex-mu.vercel.app](https://decodex-mu.vercel.app/) |
-| **Backend Health** | [decodex-backend.onrender.com/health](https://decodex-backend.onrender.com/health) |
+| **Backend Health** | [decodex-n0gq.onrender.com/health](https://decodex-n0gq.onrender.com/health) |
 
 This is a fully deployed full-stack application. The frontend is served by Vercel, the backend runs on Render, and the database is hosted on Supabase.
 
@@ -179,8 +179,7 @@ npm test
 | `OPENAI_API_KEY` | Yes | OpenAI API key for Whisper + GPT-4o-mini |
 | `GROQ_API_KEY` | No | Alternative free-tier API key (Groq) |
 | `FRONTEND_URL` | No | Frontend origin for CORS (defaults to `http://localhost:5173`) |
-| `GMAIL_USER` | No | Gmail address for consent email delivery |
-| `GMAIL_APP_PASSWORD` | No | Google App Password for email |
+| `RESEND_API_KEY` | Yes | Resend API key for transactional email delivery |
 
 ---
 
