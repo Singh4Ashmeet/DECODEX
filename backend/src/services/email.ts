@@ -72,13 +72,20 @@ const deliverEmail = async (message: EmailMessage): Promise<void> => {
 
   const resend = getResendClient();
 
-  await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from: FROM_ADDRESS,
     to: message.to,
     subject: message.subject,
     text: message.text,
     html: message.html,
   });
+
+  if (error) {
+    console.error('[Email] Resend API returned error:', JSON.stringify(error));
+    throw new Error(`Resend API error: ${error.message || JSON.stringify(error)}`);
+  }
+
+  console.log('[Email] Resend accepted:', { id: data?.id, to: message.to });
 };
 
 // ---------------------------------------------------------------------------
