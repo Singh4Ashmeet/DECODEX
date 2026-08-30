@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import type { PoolClient } from 'pg';
 import { pool } from './index';
+import { hashEmail, decryptPII, isEncrypted } from '../services/piiEncryption';
 
 const MIGRATION_LOCK_KEY = 752021993;
 const DEFAULT_DB_INIT_ATTEMPTS = 5;
@@ -181,6 +182,9 @@ async function applySchemaMigrationsAndSeed(client: Queryable) {
       console.log('Migration V14 applied successfully (idempotent).');
     }
 
+    // Backfill email_hash for existing users (runs once per user, then email_hash is set)
+    await backfillEmailHashes(client);
+
     const usersCheck = await client.query('SELECT count(*) FROM users');
     const userCount = parseInt(usersCheck.rows[0].count);
     if (shouldSeedDemoData(userCount)) {
@@ -191,6 +195,61 @@ async function applySchemaMigrationsAndSeed(client: Queryable) {
     } else {
       console.log(getSeedSkipMessage(userCount));
     }
+}
+
+/**
+ * Backfill email_hash for existing users registered before migration V14.
+ * Decrypts each user's PII-encrypted email, computes HMAC-SHA256 hash,
+ * and updates the email_hash column. Idempotent — skips users that already
+ * have an email_hash. Runs in batches of 100 for efficiency.
+ */
+async function backfillEmailHashes(client: Queryable) {
+  try {
+    const result = await client.query(
+      "SELECT id, email FROM users WHERE email_hash IS NULL AND deleted_at IS NULL"
+    );
+    const users = result.rows;
+    if (users.length === 0) {
+      console.log('Email hash backfill: all users already have email_hash.');
+      return;
+    }
+
+    console.log(`Email hash backfill: ${users.length} user(s) need backfilling...`);
+
+    let backfilled = 0;
+    let skipped = 0;
+    const BATCH_SIZE = 100;
+
+    for (let i = 0; i < users.length; i += BATCH_SIZE) {
+      const batch = users.slice(i, i + BATCH_SIZE);
+      for (const user of batch) {
+        try {
+          const email = isEncrypted(user.email) ? decryptPII(user.email) : user.email;
+          if (!email || typeof email !== 'string') {
+            skipped++;
+            continue;
+          }
+          const emailHash = hashEmail(email);
+          await client.query('UPDATE users SET email_hash = $1 WHERE id = $2', [emailHash, user.id]);
+          backfilled++;
+        } catch (err: any) {
+          skipped++;
+          console.warn(`Email hash backfill: skipped user ${user.id} — ${err?.message || 'decrypt failed'}`);
+        }
+      }
+      // Log progress for large datasets
+      if (users.length > BATCH_SIZE) {
+        console.log(`Email hash backfill: ${Math.min(i + BATCH_SIZE, users.length)}/${users.length} processed...`);
+      }
+    }
+
+    console.log(`Email hash backfill complete: ${backfilled} backfilled, ${skipped} skipped.`);
+  } catch (err: any) {
+    // Non-fatal: backfill failure shouldn't block startup.
+    // Users with NULL email_hash will be auto-backfilled on their next login
+    // via the fallback path in auth.ts.
+    console.warn('Email hash backfill failed (non-fatal):', err?.message || err);
+  }
 }
 
 function shouldSeedDemoData(userCount: number) {
