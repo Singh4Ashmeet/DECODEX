@@ -23,6 +23,7 @@ interface EmailMessage {
   to: string;
   subject: string;
   text: string;
+  html?: string;
 }
 
 const EMAIL_LOG_DIR = path.join(__dirname, '..', '..', 'email-captures');
@@ -96,6 +97,14 @@ const sendEmail = async (message: EmailMessage): Promise<void> => {
   await emailBreaker.fire(message);
 };
 
+import {
+  consentEmailHtml, consentEmailText,
+  passwordResetEmailHtml, passwordResetEmailText,
+  consentWithdrawalEmailHtml, consentWithdrawalEmailText,
+  dataDeletionEmailHtml, dataDeletionEmailText,
+  consentRenewalEmailHtml, consentRenewalEmailText,
+} from './emailTemplates';
+
 export const sendConsentEmail = async (to: string, token: string, studentName: string): Promise<void> => {
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   const consentLink = frontendUrl + '/consent/' + token;
@@ -103,18 +112,8 @@ export const sendConsentEmail = async (to: string, token: string, studentName: s
   await sendEmail({
     to,
     subject: 'Parental consent needed for Decodex',
-    text: [
-      'Hello,',
-      '',
-      'Decodex is an educational reading platform that helps students practise and understand reading patterns.',
-      '',
-      studentName + "'s account needs your consent before voice recording can be used. Decodex retains the recorded audio to allow you to review " + studentName + "'s reading progress over time. You may request deletion of this data at any time by contacting Decodex support or withdrawing consent.",
-      '',
-      'Review the consent information and verify your relationship here:',
-      consentLink,
-      '',
-      'If you did not expect this email, you can ignore it.',
-    ].join('\n'),
+    text: consentEmailText(studentName, consentLink),
+    html: consentEmailHtml({ studentName, consentLink }),
   });
 };
 
@@ -122,16 +121,8 @@ export const sendConsentWithdrawalEmail = async (to: string, studentName: string
   await sendEmail({
     to,
     subject: 'Consent withdrawn for ' + studentName + "'s Decodex account",
-    text: [
-      'Hello,',
-      '',
-      "Your consent for " + studentName + "'s Decodex account has been withdrawn.",
-      'Voice recording is now disabled for this account.',
-      '',
-      'Stored reading data will be deleted in 30 days unless another parent has active consent for the account.',
-      '',
-      'You can contact the school or Decodex support if you have questions.',
-    ].join('\n'),
+    text: consentWithdrawalEmailText(studentName),
+    html: consentWithdrawalEmailHtml({ studentName }),
   });
 };
 
@@ -139,37 +130,20 @@ export const sendDataDeletionEmail = async (to: string, studentName: string): Pr
   await sendEmail({
     to,
     subject: 'Reading data deleted for ' + studentName + "'s Decodex account",
-    text: [
-      'Hello,',
-      '',
-      "The stored reading data for " + studentName + "'s Decodex account has been deleted following the consent withdrawal.",
-      'The student account and consent record remain available for account management and compliance purposes.',
-      '',
-      'You can contact the school or Decodex support if you have questions.',
-    ].join('\n'),
+    text: dataDeletionEmailText(studentName),
+    html: dataDeletionEmailHtml({ studentName }),
   });
 };
 
 export const sendConsentRenewalEmail = async (to: string, studentName: string): Promise<void> => {
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-  const consentLink = frontendUrl + '/consent/renew';
+  const renewLink = frontendUrl + '/consent/renew';
 
   await sendEmail({
     to,
     subject: 'Consent renewal needed for ' + studentName + "'s Decodex account",
-    text: [
-      'Hello,',
-      '',
-      'Your parental consent for ' + studentName + "'s Decodex account is expiring soon.",
-      'Consent must be renewed annually to continue using voice recording features.',
-      '',
-      'Please click the link below to renew consent:',
-      consentLink,
-      '',
-      'If you have questions, contact the school or Decodex support.',
-      '',
-      'If you no longer wish to use Decodex, you can ignore this email.',
-    ].join('\n'),
+    text: consentRenewalEmailText(studentName, renewLink),
+    html: consentRenewalEmailHtml({ studentName, renewLink }),
   });
 };
 
@@ -180,17 +154,7 @@ export const sendPasswordResetEmail = async (to: string, token: string): Promise
   await sendEmail({
     to,
     subject: 'Set your password for Decodex parent account',
-    text: [
-      'Hello,',
-      '',
-      'A Decodex parent account has been created for you using this email address.',
-      '',
-      'Click the link below to set your password and access your account:',
-      resetLink,
-      '',
-      'This link expires in 24 hours.',
-      '',
-      'If you did not expect this email, you can ignore it.',
-    ].join('\n'),
+    text: passwordResetEmailText(resetLink),
+    html: passwordResetEmailHtml({ resetLink }),
   });
 };
