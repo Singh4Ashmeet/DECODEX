@@ -329,7 +329,7 @@ The backend exposes a **readiness `GET /health`** endpoint (in `server.ts`) that
 ## Deployed URLs
 
 - **Frontend**: https://decodex-mu.vercel.app/
-- **Backend Health**: https://decodex-backend.onrender.com/health (readiness check — verifies DB + critical tables, returns 503 while unavailable)
+- **Backend Health**: https://decodex-n0gq.onrender.com/health (readiness check — verifies DB + critical tables, returns 503 while unavailable)
 - **Test Accounts**: `student@decodex.com` / `teacher@decodex.com` / `parent@decodex.com` / `admin@decodex.com` — password `password123`
 - **Demo**: see `DEMO.md` — seeded demo student `demostudent@decodex.com`, consent invite code `DEMO01`, pre-loaded sessions/drills (no AI key or worker needed)
 
