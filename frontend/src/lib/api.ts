@@ -5,13 +5,18 @@ export interface ApiError extends Error {
   details?: Record<string, unknown>;
 }
 
+// Backend instances — primary first, fallback second.
+// If one is down (free-tier hibernate, deploy, etc.) we automatically retry the other.
+const RENDER_PRIMARY = 'https://decodex-n0gq.onrender.com';
+const RENDER_FALLBACK = 'https://decodex-backend.onrender.com';
+
 export function getApiBaseUrl(): string {
   let raw = (import.meta.env.VITE_API_BASE_URL || '').trim();
   raw = raw.replace(/^["']|["']$/g, '').trim();
 
   // If deployed on Vercel and VITE_API_BASE_URL wasn't baked into the build, fallback to live Render backend
   if (!raw && typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
-    return 'https://decodex-n0gq.onrender.com';
+    return RENDER_PRIMARY;
   }
 
   if (!raw) return '';
@@ -22,25 +27,21 @@ export function getApiBaseUrl(): string {
   return raw.replace(/\/$/, '');
 }
 
-export async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const baseUrl = getApiBaseUrl();
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  
-  const targetUrl = baseUrl 
-    ? `${baseUrl}/api/v1${cleanEndpoint}` 
-    : `/api/v1${cleanEndpoint}`;
+/** Check if an error means the server is unreachable / down (not a normal API error). */
+function isServerError(err: any): boolean {
+  if (err instanceof TypeError && err.message.toLowerCase().includes('failed to fetch')) return true;
+  if (err instanceof TypeError && err.message.toLowerCase().includes('network')) return true;
+  return false;
+}
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options?.headers as Record<string, string> || {}),
-  };
+/** Check if a response status indicates the server is unavailable (503, 502, etc.) */
+function isUnavailableStatus(status: number): boolean {
+  return status === 503 || status === 502 || status === 504;
+}
 
+async function fetchWithBase<T>(url: string, options: RequestInit): Promise<{ data: T; unavailable: boolean }> {
   try {
-    const response = await fetch(targetUrl, {
-      ...options,
-      credentials: 'include',
-      headers,
-    });
+    const response = await fetch(url, options);
 
     const data = await response.json().catch(() => ({}));
 
@@ -49,6 +50,10 @@ export async function apiFetch<T>(endpoint: string, options?: RequestInit): Prom
     }
 
     if (!response.ok) {
+      // For 503/502/504, signal unavailability so we can try fallback
+      if (isUnavailableStatus(response.status)) {
+        return { data: null as T, unavailable: true };
+      }
       const errorMsg = data?.error?.message || `Server Error (${response.status})`;
       const error = new Error(errorMsg) as ApiError;
       error.code = data?.error?.code;
@@ -56,13 +61,47 @@ export async function apiFetch<T>(endpoint: string, options?: RequestInit): Prom
       throw error;
     }
 
-    return data as T;
+    return { data: data as T, unavailable: false };
   } catch (err: any) {
-    if (err instanceof TypeError && err.message.toLowerCase().includes('failed to fetch')) {
-      throw new Error(`Unable to connect to Decodex backend (${targetUrl}). Please check your connection.`);
+    if (isServerError(err)) {
+      return { data: null as T, unavailable: true };
     }
     throw err;
   }
+}
+
+export async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const primary = getApiBaseUrl();
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string> || {}),
+  };
+  const fetchOptions: RequestInit = {
+    ...options,
+    credentials: 'include',
+    headers,
+  };
+
+  // Try primary URL
+  const primaryUrl = primary
+    ? `${primary}/api/v1${cleanEndpoint}`
+    : `/api/v1${cleanEndpoint}`;
+
+  const primaryResult = await fetchWithBase<T>(primaryUrl, fetchOptions);
+  if (!primaryResult.unavailable) return primaryResult.data;
+
+  // Primary is down — try fallback (only if we have a primary that's different from fallback)
+  if (primary && primary !== RENDER_FALLBACK) {
+    const fallbackUrl = `${RENDER_FALLBACK}/api/v1${cleanEndpoint}`;
+    console.warn(`[apiFetch] Primary (${primary}) unavailable, trying fallback (${RENDER_FALLBACK})...`);
+    const fallbackResult = await fetchWithBase<T>(fallbackUrl, fetchOptions);
+    if (!fallbackResult.unavailable) return fallbackResult.data;
+  }
+
+  // Both failed
+  throw new Error(`Unable to connect to Decodex backend. Please check your connection and try again.`);
 }
 
 export function useApiQuery<T>(endpoint: string, options?: RequestInit) {
