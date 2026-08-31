@@ -14,7 +14,7 @@ Decodex captures students reading aloud, transcribes via Whisper, aligns against
 | Component | URL |
 |-----------|-----|
 | **Frontend** | [decodex-mu.vercel.app](https://decodex-mu.vercel.app/) |
-| **Backend Health** | [decodex-backend.onrender.com/health](https://decodex-backend.onrender.com/health) |
+| **Backend Health** | [decodex-n0gq.onrender.com/health](https://decodex-n0gq.onrender.com/health) |
 
 This is a fully deployed full-stack application. The frontend is served by Vercel, the backend runs on Render, and the database is hosted on Supabase.
 
