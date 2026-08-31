@@ -14,11 +14,23 @@ Decodex captures students reading aloud, transcribes via Whisper, aligns against
 | Component | URL |
 |-----------|-----|
 | **Frontend** | [decodex-mu.vercel.app](https://decodex-mu.vercel.app/) |
-| **Backend Health** | [decodex-n0gq.onrender.com/health](https://decodex-n0gq.onrender.com/health) |
+| **Backend Health** | [decodex-backend.onrender.com/health](https://decodex-backend.onrender.com/health) |
 
 This is a fully deployed full-stack application. The frontend is served by Vercel, the backend runs on Render, and the database is hosted on Supabase.
 
-**Test accounts:** `student@decodex.com` / `teacher@decodex.com` / `parent@decodex.com` — password `password123`
+**Demo sandbox accounts** (seeded, no real data): see [CONTRIBUTING.md](CONTRIBUTING.md#test-accounts-sandbox-only)
+
+### Demo vs Production
+
+| Aspect | Demo Sandbox | Production |
+|--------|--------------|------------|
+| **Data** | Seeded fake passages, drills, analytics only | Real student recordings, transcripts, error profiles |
+| **Consent** | Pre-granted for demo flow | Verifiable parental consent required (invite code + DoB) |
+| **Audio** | Not persisted (or mock) | Stored in private object storage (Supabase/local) |
+| **Accounts** | Shared public credentials (see CONTRIBUTING.md) | Individual private accounts, bcrypt-hashed passwords |
+| **Purpose** | Developer testing, Product Hunt demo | Real educational use by schools/families |
+
+> **Privacy note:** The deployed demo at `decodex-mu.vercel.app` runs in **sandbox mode** with `SEED_DEMO_DATA=true`. No real children's data is ever processed or stored in the demo environment.
 
 ---
 

@@ -7,8 +7,8 @@ export interface ApiError extends Error {
 
 // Backend instances — primary first, fallback second.
 // If one is down (free-tier hibernate, deploy, etc.) we automatically retry the other.
-const RENDER_PRIMARY = 'https://decodex-n0gq.onrender.com';
-const RENDER_FALLBACK = 'https://decodex-backend.onrender.com';
+const RENDER_PRIMARY = 'https://decodex-backend.onrender.com';
+const RENDER_FALLBACK = 'https://decodex-n0gq.onrender.com';
 
 export function getApiBaseUrl(): string {
   let raw = (import.meta.env.VITE_API_BASE_URL || '').trim();
